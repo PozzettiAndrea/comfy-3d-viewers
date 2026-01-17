@@ -4,13 +4,13 @@
 """
 comfy-3d-viewers: Reusable 3D viewer infrastructure for ComfyUI nodes.
 
-Provides VTK.js and Gaussian splatting viewers, shared utilities,
+Provides VTK.js, Three.js FBX, and Gaussian splatting viewers, shared utilities,
 and HTML templates for 3D mesh visualization in ComfyUI.
 """
 
 import os
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 def get_package_dir() -> str:
@@ -75,3 +75,25 @@ def list_utils() -> list[str]:
     if not os.path.exists(utils_dir):
         return []
     return [f for f in os.listdir(utils_dir) if f.endswith('.js')]
+
+
+# FBX Viewer specific functions
+
+def get_three_dir() -> str:
+    """Return path to the Three.js modules directory (for FBX viewer)."""
+    return os.path.join(get_web_dir(), "three")
+
+
+def get_fbx_html_path() -> str:
+    """Return path to the FBX viewer HTML template."""
+    return os.path.join(get_html_dir(), "viewer_fbx.html")
+
+
+def get_fbx_bundle_path() -> str:
+    """Return path to the Three.js bundle for FBX viewer."""
+    return os.path.join(get_three_dir(), "viewer-bundle.js")
+
+
+def get_fbx_node_widget_path() -> str:
+    """Return path to the generic FBX preview node widget JS file."""
+    return os.path.join(get_nodes_dir(), "mesh_preview_fbx.js")
