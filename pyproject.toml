@@ -33,11 +33,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/comfy-3d-viewers"
-Repository = "https://github.com/your-org/comfy-3d-viewers"
+Homepage = "https://github.com/PozzettiAndrea/comfy-3d-viewers"
+Repository = "https://github.com/PozzettiAndrea/comfy-3d-viewers"
 
 [tool.hatch.build.targets.wheel]
 packages = ["comfy_3d_viewers"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"comfy_3d_viewers/web" = "comfy_3d_viewers/web"
