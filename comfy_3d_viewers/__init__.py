@@ -43,6 +43,16 @@ def get_viewer_dir() -> str:
     return os.path.join(get_js_dir(), "viewer")
 
 
+def get_nodes_dir() -> str:
+    """Return path to the node widget JS files directory."""
+    return os.path.join(get_js_dir(), "nodes")
+
+
+def get_assets_dir() -> str:
+    """Return path to the assets directory (HDR environments, etc.)."""
+    return os.path.join(get_web_dir(), "assets")
+
+
 def list_html_templates() -> list[str]:
     """List all available HTML viewer templates."""
     html_dir = get_html_dir()
