@@ -97,3 +97,23 @@ def get_fbx_bundle_path() -> str:
 def get_fbx_node_widget_path() -> str:
     """Return path to the generic FBX preview node widget JS file."""
     return os.path.join(get_nodes_dir(), "mesh_preview_fbx.js")
+
+
+def get_fbx_debug_html_path() -> str:
+    """Return path to the FBX debug viewer HTML template."""
+    return os.path.join(get_html_dir(), "viewer_fbx_debug.html")
+
+
+def get_fbx_compare_html_path() -> str:
+    """Return path to the FBX compare viewer HTML template."""
+    return os.path.join(get_html_dir(), "viewer_fbx_compare.html")
+
+
+def get_fbx_debug_widget_path() -> str:
+    """Return path to the debug skeleton widget JS file."""
+    return os.path.join(get_nodes_dir(), "debug_skeleton_widget.js")
+
+
+def get_fbx_compare_widget_path() -> str:
+    """Return path to the compare skeleton widget JS file."""
+    return os.path.join(get_nodes_dir(), "compare_skeleton_widget.js")
