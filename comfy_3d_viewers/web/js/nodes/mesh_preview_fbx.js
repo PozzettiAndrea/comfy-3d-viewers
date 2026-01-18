@@ -61,9 +61,9 @@ function detectExtensionFolder() {
  * @param {string} extensionFolder - The extension folder name
  * @returns {string} The URL to the viewer HTML
  */
-function getViewerUrl(extensionFolder) {
+function getViewerUrl(extensionFolder, viewerFile = "viewer_fbx.html") {
     // Add cache-busting timestamp
-    return `/extensions/${extensionFolder}/viewer_fbx.html?v=` + Date.now();
+    return `/extensions/${extensionFolder}/${viewerFile}?v=` + Date.now();
 }
 
 /**

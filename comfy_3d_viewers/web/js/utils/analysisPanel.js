@@ -278,3 +278,19 @@ export function calculatePanelHeight(numRows, maxRows = 20, baseHeight = 40, row
     const displayRows = Math.min(numRows, maxRows) + 3; // +3 for header rows
     return Math.min(Math.max(minHeight, displayRows * rowHeight + baseHeight), maxHeight);
 }
+
+/**
+ * Build text report HTML (for nodes that output plain text info/reports)
+ * @param {string} text - Plain text report
+ * @returns {string} HTML string with styling
+ */
+export function buildTextReportHTML(text) {
+    // Convert newlines to <br>, escape HTML
+    const escaped = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>');
+
+    return `<div style="white-space: pre-wrap; font-size: 10px; line-height: 1.4;">${escaped}</div>`;
+}
