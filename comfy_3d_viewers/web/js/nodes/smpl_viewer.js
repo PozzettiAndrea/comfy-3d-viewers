@@ -16,30 +16,64 @@ const SMPL_VIEWER_NODES = [
     }
 ];
 
-// Simple 3D to 2D projection
+// Orbital camera 3D to 2D projection
 function project3D(point, camera) {
-    const dx = point[0] - camera.x;
-    const dy = point[1] - camera.y;
-    const dz = point[2] - camera.z;
+    // Compute camera position from spherical coordinates
+    const camX = camera.target.x + camera.distance * Math.cos(camera.elevation) * Math.sin(camera.azimuth);
+    const camY = camera.target.y + camera.distance * Math.sin(camera.elevation);
+    const camZ = camera.target.z + camera.distance * Math.cos(camera.elevation) * Math.cos(camera.azimuth);
 
-    // Rotate around Y axis
-    const cosY = Math.cos(camera.rotY);
-    const sinY = Math.sin(camera.rotY);
-    const x1 = dx * cosY - dz * sinY;
-    const z1 = dx * sinY + dz * cosY;
+    // Forward vector (camera to target, normalized)
+    const fwdX = camera.target.x - camX;
+    const fwdY = camera.target.y - camY;
+    const fwdZ = camera.target.z - camZ;
+    const fwdLen = Math.sqrt(fwdX*fwdX + fwdY*fwdY + fwdZ*fwdZ);
+    const fx = fwdX/fwdLen, fy = fwdY/fwdLen, fz = fwdZ/fwdLen;
 
-    // Rotate around X axis
-    const cosX = Math.cos(camera.rotX);
-    const sinX = Math.sin(camera.rotX);
-    const y2 = dy * cosX - z1 * sinX;
-    const z2 = dy * sinX + z1 * cosX;
+    // Right vector = up(0,1,0) × forward = (fz, 0, -fx)
+    const rxRaw = fz, rzRaw = -fx;
+    const rLen = Math.sqrt(rxRaw*rxRaw + rzRaw*rzRaw) || 1;
+    const rx = rxRaw/rLen, rz = rzRaw/rLen;
 
-    // Perspective projection
-    const scale = camera.distance / (camera.distance + z2);
+    // Up vector = right × forward = (-rz*fy, rz*fx - rx*fz, rx*fy)
+    const ux = -rz * fy;
+    const uy = rz * fx - rx * fz;
+    const uz = rx * fy;
+
+    // Transform point to camera space
+    const dx = point[0] - camX;
+    const dy = point[1] - camY;
+    const dz = point[2] - camZ;
+
+    const projX = dx * rx + dz * rz;
+    const projY = dx * ux + dy * uy + dz * uz;
+    const projZ = dx * fx + dy * fy + dz * fz;
+
+    // Perspective
+    const scale = 300 / Math.max(0.1, projZ);
     return {
-        x: x1 * scale * 300 + camera.centerX,
-        y: -y2 * scale * 300 + camera.centerY,
-        z: z2
+        x: projX * scale + camera.centerX,
+        y: projY * scale + camera.centerY,
+        z: projZ
+    };
+}
+
+// Compute bounding box center of mesh vertices
+function computeMeshCenter(vertices) {
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+
+    for (const v of vertices) {
+        minX = Math.min(minX, v[0]); maxX = Math.max(maxX, v[0]);
+        minY = Math.min(minY, v[1]); maxY = Math.max(maxY, v[1]);
+        minZ = Math.min(minZ, v[2]); maxZ = Math.max(maxZ, v[2]);
+    }
+
+    return {
+        x: (minX + maxX) / 2,
+        y: (minY + maxY) / 2,
+        z: (minZ + maxZ) / 2
     };
 }
 
@@ -118,8 +152,9 @@ function createSMPLViewerExtension(config) {
                     currentFrame: 0,
                     isPlaying: false,
                     camera: {
-                        x: 0, y: 1, z: 0,
-                        rotX: 0, rotY: 0,
+                        target: { x: 0, y: 0.9, z: 0 },  // Fixed look-at point (body center)
+                        azimuth: 0,      // Horizontal angle (radians)
+                        elevation: 0.3,  // Vertical angle (radians), start slightly above
                         distance: 3,
                         centerX: canvas.width / 2,
                         centerY: canvas.height / 2
@@ -146,8 +181,11 @@ function createSMPLViewerExtension(config) {
                     if (self.smplViewerState.mouseDown) {
                         const dx = e.clientX - self.smplViewerState.lastMouseX;
                         const dy = e.clientY - self.smplViewerState.lastMouseY;
-                        self.smplViewerState.camera.rotY += dx * 0.01;
-                        self.smplViewerState.camera.rotX += dy * 0.01;
+                        self.smplViewerState.camera.azimuth -= dx * 0.01;
+                        self.smplViewerState.camera.elevation += dy * 0.01;
+                        // Clamp elevation to avoid flipping
+                        self.smplViewerState.camera.elevation = Math.max(-Math.PI/2 + 0.1,
+                            Math.min(Math.PI/2 - 0.1, self.smplViewerState.camera.elevation));
                         self.smplViewerState.lastMouseX = e.clientX;
                         self.smplViewerState.lastMouseY = e.clientY;
                         self.redrawSMPLCanvas();
@@ -188,6 +226,12 @@ function createSMPLViewerExtension(config) {
                         const data = message.smpl_mesh[0];
                         self.smplViewerState.meshData = data;
                         self.smplViewerState.currentFrame = 0;
+
+                        // Center camera on first frame mesh
+                        if (data.vertices && data.vertices.length > 0) {
+                            self.smplViewerState.camera.target = computeMeshCenter(data.vertices[0]);
+                        }
+
                         frameSlider.max = data.frames - 1;
                         frameSlider.disabled = false;
                         playButton.disabled = false;

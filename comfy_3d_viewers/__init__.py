@@ -119,6 +119,25 @@ def get_fbx_compare_widget_path() -> str:
     return os.path.join(get_nodes_dir(), "compare_skeleton_widget.js")
 
 
+# SMPL Viewer specific functions
+
+def get_smpl_widget_path() -> str:
+    """Return path to the SMPL viewer widget JS file (Canvas 2D, no HTML needed)."""
+    return os.path.join(get_nodes_dir(), "smpl_viewer.js")
+
+
+# Compare SMPL/BVH Viewer specific functions
+
+def get_compare_smpl_bvh_html_path() -> str:
+    """Return path to the Compare SMPL/BVH viewer HTML template."""
+    return os.path.join(get_html_dir(), "viewer_compare_smpl_bvh.html")
+
+
+def get_compare_smpl_bvh_widget_path() -> str:
+    """Return path to the Compare SMPL/BVH widget JS file."""
+    return os.path.join(get_nodes_dir(), "compare_smpl_bvh.js")
+
+
 # BVH Viewer specific functions
 
 def get_bvh_html_path() -> str:
@@ -131,17 +150,10 @@ def get_bvh_widget_path() -> str:
     return os.path.join(get_nodes_dir(), "bvh_viewer.js")
 
 
-# SMPL Viewer specific functions
-
-def get_smpl_widget_path() -> str:
-    """Return path to the SMPL viewer widget JS file (Canvas 2D, no HTML)."""
-    return os.path.join(get_nodes_dir(), "smpl_viewer.js")
-
-
 # MHR Viewer specific functions
 
 def get_mhr_widget_path() -> str:
-    """Return path to the MHR skeleton viewer widget JS file (Canvas 2D, no HTML)."""
+    """Return path to the MHR skeleton viewer widget JS file (Canvas 2D, no HTML needed)."""
     return os.path.join(get_nodes_dir(), "mhr_viewer.js")
 
 
@@ -157,19 +169,7 @@ def get_fbx_animation_widget_path() -> str:
     return os.path.join(get_nodes_dir(), "fbx_animation_viewer.js")
 
 
-# Compare SMPL/BVH Viewer specific functions
-
-def get_compare_smpl_bvh_html_path() -> str:
-    """Return path to the Compare SMPL/BVH viewer HTML template."""
-    return os.path.join(get_html_dir(), "viewer_compare_smpl_bvh.html")
-
-
-def get_compare_smpl_bvh_widget_path() -> str:
-    """Return path to the Compare SMPL/BVH viewer widget JS file."""
-    return os.path.join(get_nodes_dir(), "compare_smpl_bvh.js")
-
-
-# File List Updater utility
+# Utility functions
 
 def get_file_list_updater_path() -> str:
     """Return path to the file list updater utility JS file."""
