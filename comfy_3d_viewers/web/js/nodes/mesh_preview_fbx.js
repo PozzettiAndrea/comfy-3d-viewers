@@ -23,6 +23,16 @@ const FBX_PREVIEW_NODES = [
         extensionName: "sam3dbody.meshpreview",
         logPrefix: "[SAM3DBody]"
         // Note: SAM3DBody doesn't have FBX export API
+    },
+    {
+        nodeName: "MocapPreviewRiggedMesh",
+        extensionName: "motioncapture.meshpreview",
+        logPrefix: "[MotionCapture]"
+    },
+    {
+        nodeName: "FBXPreview",
+        extensionName: "motioncapture.fbxpreview.legacy",
+        logPrefix: "[MotionCapture]"
     }
 ];
 
