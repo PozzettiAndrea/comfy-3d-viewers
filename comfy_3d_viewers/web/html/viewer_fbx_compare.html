@@ -790,21 +790,50 @@
                             viewer.meshBounds = box;
                         }
 
-                        // Extract bones
+                        // Extract bones - handle both skinned mesh and armature-only FBX
+                        let rootBone = null;
                         fbx.traverse((child) => {
-                            if (child.isSkinnedMesh) {
-                                if (child.skeleton) {
-                                    viewer.skeletonHelper = new THREE.SkeletonHelper(child);
-                                    viewer.skeletonHelper.material = new THREE.LineBasicMaterial({
-                                        color: 0x00ff00,
-                                        linewidth: 2,
-                                        depthTest: !document.getElementById('xraySkeleton').checked
-                                    });
-                                    viewer.model.add(viewer.skeletonHelper);
-                                    viewer.bones = child.skeleton.bones;
+                            // Method 1: From SkinnedMesh (Mixamo-style with mesh)
+                            if (child.isSkinnedMesh && child.skeleton) {
+                                viewer.skeletonHelper = new THREE.SkeletonHelper(child);
+                                viewer.skeletonHelper.material = new THREE.LineBasicMaterial({
+                                    color: 0x00ff00,
+                                    linewidth: 2,
+                                    depthTest: !document.getElementById('xraySkeleton').checked
+                                });
+                                viewer.model.add(viewer.skeletonHelper);
+                                viewer.bones = child.skeleton.bones;
+                            }
+                            // Method 2: Find root bone for armature-only FBX
+                            if (child.isBone && !rootBone) {
+                                // Find the topmost bone (one with no bone parent)
+                                let current = child;
+                                while (current.parent && current.parent.isBone) {
+                                    current = current.parent;
                                 }
+                                rootBone = current;
                             }
                         });
+
+                        // If no bones from skinned mesh, collect from armature hierarchy
+                        if (viewer.bones.length === 0 && rootBone) {
+                            const collectBones = (bone) => {
+                                viewer.bones.push(bone);
+                                bone.children.forEach(child => {
+                                    if (child.isBone) collectBones(child);
+                                });
+                            };
+                            collectBones(rootBone);
+
+                            // Create skeleton helper from root bone
+                            viewer.skeletonHelper = new THREE.SkeletonHelper(rootBone);
+                            viewer.skeletonHelper.material = new THREE.LineBasicMaterial({
+                                color: 0x00ff00,
+                                linewidth: 2,
+                                depthTest: !document.getElementById('xraySkeleton').checked
+                            });
+                            viewer.model.add(viewer.skeletonHelper);
+                        }
 
                         viewer.scene.add(viewer.model);
 
