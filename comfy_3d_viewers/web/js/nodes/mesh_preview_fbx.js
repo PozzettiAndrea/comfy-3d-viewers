@@ -244,15 +244,19 @@ export function createFBXPreviewExtension(config) {
 
                             // Try different path formats based on filename
                             let filepath;
+                            let folderType = 'output';  // default
 
-                            // If filename is just a basename, it's in output
-                            if (!filename.includes('/') && !filename.includes('\\')) {
-                                filepath = `${window.location.origin}/view?filename=${encodeURIComponent(filename)}&type=output&subfolder=`;
-                            } else {
-                                // Full path - extract just the filename
-                                const basename = filename.split(/[/\\]/).pop();
-                                filepath = `${window.location.origin}/view?filename=${encodeURIComponent(basename)}&type=output&subfolder=`;
+                            // Detect folder type from path
+                            if (filename.includes('/input/') || filename.includes('\\input\\')) {
+                                folderType = 'input';
                             }
+
+                            // Extract basename if full path provided
+                            const basename = filename.includes('/') || filename.includes('\\')
+                                ? filename.split(/[/\\]/).pop()
+                                : filename;
+
+                            filepath = `${window.location.origin}/view?filename=${encodeURIComponent(basename)}&type=${folderType}&subfolder=`;
 
                             // Send message to iframe
                             const sendMessage = () => {
