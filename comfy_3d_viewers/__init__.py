@@ -174,3 +174,76 @@ def get_fbx_animation_widget_path() -> str:
 def get_file_list_updater_path() -> str:
     """Return path to the file list updater utility JS file."""
     return os.path.join(get_nodes_dir(), "file_list_updater.js")
+
+
+# High-level copy helpers
+
+VIEWER_FILES = {
+    "fbx": {
+        "html": ("viewer_fbx.html", ""),
+        "bundle": ("viewer-bundle.js", "three/"),
+        "widget": ("mesh_preview_fbx.js", "js/"),
+    },
+    "fbx_debug": {
+        "html": ("viewer_fbx_debug.html", ""),
+        "widget": ("debug_skeleton_widget.js", "js/"),
+    },
+    "fbx_compare": {
+        "html": ("viewer_fbx_compare.html", ""),
+        "widget": ("compare_skeleton_widget.js", "js/"),
+    },
+    "bvh": {
+        "html": ("viewer_bvh.html", ""),
+        "widget": ("bvh_viewer.js", "js/"),
+    },
+    "fbx_animation": {
+        "html": ("viewer_fbx_animation.html", ""),
+        "widget": ("fbx_animation_viewer.js", "js/"),
+    },
+}
+
+
+def copy_viewer(viewer: str, target_dir) -> None:
+    """Copy viewer files to target directory."""
+    import shutil
+    from pathlib import Path
+
+    target_dir = Path(target_dir)
+    files = VIEWER_FILES.get(viewer)
+    if not files:
+        raise ValueError(f"Unknown viewer: {viewer}")
+
+    for file_type, (filename, subdir) in files.items():
+        if file_type == "html":
+            src = os.path.join(get_html_dir(), filename)
+        elif file_type == "bundle":
+            src = os.path.join(get_three_dir(), filename)
+        elif file_type == "widget":
+            src = os.path.join(get_nodes_dir(), filename)
+        else:
+            continue
+
+        dst_dir = target_dir / subdir if subdir else target_dir
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        dst = dst_dir / filename
+
+        if os.path.exists(src) and (not dst.exists() or os.path.getmtime(src) > os.path.getmtime(dst)):
+            shutil.copy2(src, dst)
+
+
+def copy_files(src, dst, pattern: str = "*") -> None:
+    """Copy files matching pattern from src to dst (skip existing)."""
+    import shutil
+    from pathlib import Path
+
+    src, dst = Path(src), Path(dst)
+    if not src.exists():
+        return
+
+    dst.mkdir(parents=True, exist_ok=True)
+    for f in src.glob(pattern):
+        if f.is_file():
+            target = dst / f.relative_to(src)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if not target.exists():
+                shutil.copy2(f, target)
