@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; background: #1a1a1a; }
+        #canvas-container { width: 100%; height: 100%; position: relative; }
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; font-size: 16px; background: rgba(0,0,0,0.8);
+            padding: 15px 20px; border-radius: 8px; z-index: 100; font-family: Arial, sans-serif;
+        }
+        #cam-label {
+            position: absolute; top: 10px; right: 10px;
+            color: rgba(255,255,255,0.7); font-size: 12px; font-family: monospace;
+            background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 4px; z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container">
+        <div id="loading">Waiting for data...</div>
+        <div id="cam-label">Orbit</div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        let renderer, scene, orbitCamera, orbitControls;
+        let trajectoryCamera;
+        let cameraFrustum = null;  // CameraHelper for exterior view
+        let grid, axesHelper;
+        let smplMesh = null;
+        let meshData = null;
+        let isPlaying = false;
+        let currentFrame = 0;
+        let speed = 1.0;
+        let clock = new THREE.Clock();
+        // Modes: 'through_camera', 'exterior'
+        let cameraMode = 'exterior';
+
+        const camLabel = document.getElementById('cam-label');
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(w, h);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111111);
+
+            // Grid and axes (hidden in through_camera mode)
+            grid = new THREE.GridHelper(10, 10, 0x444444, 0x222222);
+            scene.add(grid);
+            axesHelper = new THREE.AxesHelper(0.5);
+            scene.add(axesHelper);
+
+            // Lighting
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            dirLight.position.set(2, 5, 5);
+            scene.add(dirLight);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+            // Orbit camera (default/fallback + exterior mode)
+            orbitCamera = new THREE.PerspectiveCamera(50, w / h, 0.01, 100);
+            orbitCamera.position.set(0, 1.5, 4);
+
+            orbitControls = new OrbitControls(orbitCamera, renderer.domElement);
+            orbitControls.target.set(0, 1, 0);
+            orbitControls.enableDamping = true;
+
+            // Trajectory camera (set per-frame from extrinsics/intrinsics)
+            trajectoryCamera = new THREE.PerspectiveCamera(50, w / h, 0.01, 20);
+            trajectoryCamera.matrixAutoUpdate = false;
+
+            window.addEventListener('resize', onResize);
+            window.addEventListener('message', handleMessage);
+
+            animate();
+            window.parent.postMessage({ type: 'VIEWER_READY' }, '*');
+        }
+
+        function onResize() {
+            const container = document.getElementById('canvas-container');
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            if (w === 0 || h === 0) return;
+
+            renderer.setSize(w, h);
+            orbitCamera.aspect = w / h;
+            orbitCamera.updateProjectionMatrix();
+        }
+
+        function handleMessage(event) {
+            const data = event.data;
+
+            if (data.type === 'loadMesh') {
+                loadMeshFromBuffer(data.buffer);
+            } else if (data.type === 'play') {
+                isPlaying = true;
+                clock.start();
+            } else if (data.type === 'pause') {
+                isPlaying = false;
+            } else if (data.type === 'setFrame') {
+                currentFrame = data.frame;
+                updateFrame(currentFrame);
+                sendFrameUpdate();
+            } else if (data.type === 'setCameraMode') {
+                setCameraMode(data.mode);
+            } else if (data.type === 'setSpeed') {
+                speed = data.speed;
+            }
+        }
+
+        function setCameraMode(mode) {
+            cameraMode = mode;
+            console.log(`[SMPC] Camera mode: ${mode}`);
+
+            if (mode === 'through_camera') {
+                camLabel.textContent = 'Through Camera';
+                orbitControls.enabled = false;
+                grid.visible = false;
+                axesHelper.visible = false;
+                if (cameraFrustum) cameraFrustum.visible = false;
+                if (meshData && meshData.hasCamera) {
+                    updateFrame(currentFrame);
+                }
+            } else {
+                // exterior
+                camLabel.textContent = 'Exterior';
+                orbitControls.enabled = true;
+                grid.visible = true;
+                axesHelper.visible = true;
+                if (cameraFrustum) cameraFrustum.visible = true;
+                if (meshData) {
+                    updateFrame(currentFrame);
+                }
+            }
+        }
+
+        function parseSMPCBin(buffer) {
+            console.log(`[SMPC] Parsing buffer: ${buffer.byteLength} bytes`);
+            const dv = new DataView(buffer);
+            let offset = 4; // skip "SMPC" magic
+
+            const numFrames = dv.getUint32(offset, true); offset += 4;
+            const numVerts  = dv.getUint32(offset, true); offset += 4;
+            const numFaces  = dv.getUint32(offset, true); offset += 4;
+            const fps       = dv.getFloat32(offset, true); offset += 4;
+            console.log(`[SMPC] Header: frames=${numFrames}, verts=${numVerts}, faces=${numFaces}, fps=${fps}`);
+
+            // mesh_color (64 bytes, null-terminated UTF-8)
+            const colorBytes = new Uint8Array(buffer, offset, 64);
+            let colorEnd = colorBytes.indexOf(0);
+            if (colorEnd === -1) colorEnd = 64;
+            const meshColor = new TextDecoder().decode(colorBytes.subarray(0, colorEnd));
+            offset += 64;
+
+            // has_camera (u32 for 4-byte alignment)
+            const hasCamera = dv.getUint32(offset, true) === 1;
+            offset += 4;
+
+            // image dimensions
+            const imgWidth  = dv.getUint32(offset, true); offset += 4;
+            const imgHeight = dv.getUint32(offset, true); offset += 4;
+            console.log(`[SMPC] hasCamera=${hasCamera}, img=${imgWidth}x${imgHeight}, offset=${offset}`);
+
+            // vertex data: F * V * 3 float32
+            const vertexCount = numFrames * numVerts * 3;
+            const vertices = new Float32Array(buffer, offset, vertexCount);
+            offset += vertexCount * 4;
+
+            // face data: Nf * 3 uint32
+            const faceCount = numFaces * 3;
+            const faces = new Uint32Array(buffer, offset, faceCount);
+            offset += faceCount * 4;
+
+            // camera data (optional) -- R_cam2world/t_cam2world in GV Y-up frame
+            let R_cam2world = null, t_cam2world = null, K_fullimg = null;
+            if (hasCamera) {
+                console.log(`[SMPC] Reading camera data at offset=${offset}`);
+                R_cam2world = new Float32Array(buffer, offset, numFrames * 9);
+                offset += numFrames * 9 * 4;
+                t_cam2world = new Float32Array(buffer, offset, numFrames * 3);
+                offset += numFrames * 3 * 4;
+                K_fullimg = new Float32Array(buffer, offset, numFrames * 9);
+                offset += numFrames * 9 * 4;
+                console.log(`[SMPC] Camera pos frame 0: [${t_cam2world[0].toFixed(3)}, ${t_cam2world[1].toFixed(3)}, ${t_cam2world[2].toFixed(3)}]`);
+                console.log(`[SMPC] K_fullimg[0]: fx=${K_fullimg[0].toFixed(1)}, fy=${K_fullimg[4].toFixed(1)}, cx=${K_fullimg[2].toFixed(1)}, cy=${K_fullimg[5].toFixed(1)}`);
+            }
+
+            // Incam vertices (optional) -- for through-camera rendering
+            let incamVertices = null;
+            const hasIncam = dv.getUint32(offset, true) === 1;
+            offset += 4;
+            if (hasIncam) {
+                incamVertices = new Float32Array(buffer, offset, numFrames * numVerts * 3);
+                offset += numFrames * numVerts * 3 * 4;
+                console.log(`[SMPC] Loaded incam vertices: ${numFrames} frames`);
+            }
+
+            console.log(`[SMPC] Parse complete. ${offset}/${buffer.byteLength} bytes consumed`);
+
+            return {
+                numFrames, numVerts, numFaces, fps,
+                meshColor, hasCamera, imgWidth, imgHeight,
+                vertices, faces, R_cam2world, t_cam2world, K_fullimg,
+                incamVertices
+            };
+        }
+
+        function loadMeshFromBuffer(buffer) {
+            const loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            loading.textContent = 'Parsing mesh data...';
+
+            try {
+                meshData = parseSMPCBin(buffer);
+                console.log(`[SMPC] Loaded: ${meshData.numFrames} frames, ${meshData.numVerts} verts, camera=${meshData.hasCamera}, incam=${meshData.incamVertices !== null}`);
+
+                // Remove old mesh
+                if (smplMesh) {
+                    scene.remove(smplMesh);
+                    smplMesh.geometry.dispose();
+                    smplMesh.material.dispose();
+                }
+
+                // Remove old camera frustum
+                if (cameraFrustum) {
+                    scene.remove(cameraFrustum);
+                    cameraFrustum.dispose();
+                    cameraFrustum = null;
+                }
+
+                // Create geometry
+                const geo = new THREE.BufferGeometry();
+                const firstFrameVerts = new Float32Array(meshData.numVerts * 3);
+                firstFrameVerts.set(meshData.vertices.subarray(0, meshData.numVerts * 3));
+                geo.setAttribute('position', new THREE.BufferAttribute(firstFrameVerts, 3));
+                geo.setIndex(new THREE.BufferAttribute(meshData.faces, 1));
+                geo.computeVertexNormals();
+
+                // Parse mesh color
+                let color = 0x4a9eff;
+                if (meshData.meshColor && meshData.meshColor.startsWith('#')) {
+                    color = parseInt(meshData.meshColor.substring(1), 16);
+                }
+
+                const mat = new THREE.MeshPhongMaterial({
+                    color: color,
+                    flatShading: false,
+                    shininess: 30,
+                    side: THREE.DoubleSide
+                });
+                smplMesh = new THREE.Mesh(geo, mat);
+                scene.add(smplMesh);
+
+                // Wireframe overlay as child of mesh (shares geometry, animates together)
+                const wireMat = new THREE.MeshBasicMaterial({
+                    color: 0xffffff, wireframe: true,
+                    opacity: 0.06, transparent: true,
+                });
+                smplMesh.add(new THREE.Mesh(geo, wireMat));
+
+                // Create camera frustum helper for exterior view
+                if (meshData.hasCamera) {
+                    // Set up trajectory camera with a reasonable FOV for the frustum visualization
+                    const K = meshData.K_fullimg;
+                    const fx = K[0], fy = K[4];
+                    const w = meshData.imgWidth, h = meshData.imgHeight;
+                    const fovY = 2 * Math.atan(h / (2 * fy)) * (180 / Math.PI);
+                    trajectoryCamera.fov = fovY;
+                    trajectoryCamera.aspect = w / h;
+                    trajectoryCamera.near = 0.1;
+                    trajectoryCamera.far = 2.0;  // Short frustum for visualization
+                    trajectoryCamera.updateProjectionMatrix();
+
+                    cameraFrustum = new THREE.CameraHelper(trajectoryCamera);
+                    cameraFrustum.visible = false;  // Hidden until exterior mode
+                    scene.add(cameraFrustum);
+                    console.log(`[SMPC] Created camera frustum helper, fovY=${fovY.toFixed(1)}`);
+                }
+
+                // Set initial camera mode
+                if (meshData.hasCamera) {
+                    setCameraMode('through_camera');
+                    setCameraFromFrame(0);
+                } else {
+                    setCameraMode('exterior');
+                }
+
+                currentFrame = 0;
+                loading.style.display = 'none';
+
+                // Notify parent
+                window.parent.postMessage({
+                    type: 'meshLoaded',
+                    totalFrames: meshData.numFrames,
+                    hasCamera: meshData.hasCamera
+                }, '*');
+
+            } catch (e) {
+                loading.textContent = 'Error: ' + e.message;
+                console.error('[SMPC] Parse error:', e);
+            }
+        }
+
+        function setCameraFromFrame(frame) {
+            if (!meshData || !meshData.hasCamera) return;
+
+            const f = Math.min(frame, meshData.numFrames - 1);
+
+            // Build the projection matrix from intrinsics
+            const ki = f * 9;
+            const fx = meshData.K_fullimg[ki + 0];
+            const fy = meshData.K_fullimg[ki + 4];
+            const cx = meshData.K_fullimg[ki + 2];
+            const cy = meshData.K_fullimg[ki + 5];
+            const w = meshData.imgWidth;
+            const h = meshData.imgHeight;
+            const near = 0.01;
+            const far = 100.0;
+
+            if (cameraMode === 'through_camera') {
+                // OpenGL projection matrix from pinhole intrinsics
+                const projMatrix = new THREE.Matrix4();
+                projMatrix.set(
+                    2*fx/w,  0,        -(2*cx/w - 1),   0,
+                    0,       2*fy/h,   -(2*cy/h - 1),   0,
+                    0,       0,        -(far+near)/(far-near),  -2*far*near/(far-near),
+                    0,       0,        -1,               0
+                );
+                trajectoryCamera.projectionMatrix.copy(projMatrix);
+                trajectoryCamera.projectionMatrixInverse.copy(projMatrix).invert();
+
+                if (meshData.incamVertices) {
+                    // Use incam vertices directly -- camera at origin with OpenCV->Three.js flip
+                    // Incam vertices are already in camera space (computed with global_orient_incam/transl_incam)
+                    trajectoryCamera.matrixWorld.set(
+                        1,  0,  0, 0,
+                        0, -1,  0, 0,
+                        0,  0, -1, 0,
+                        0,  0,  0, 1
+                    );
+                    trajectoryCamera.matrixWorldInverse.copy(trajectoryCamera.matrixWorld).invert();
+                } else {
+                    // Fallback: use R_cam2world with OpenCV->Three.js column flip
+                    const ri = f * 9;
+                    const ti = f * 3;
+                    const R00 = meshData.R_cam2world[ri+0], R01 = meshData.R_cam2world[ri+1], R02 = meshData.R_cam2world[ri+2];
+                    const R10 = meshData.R_cam2world[ri+3], R11 = meshData.R_cam2world[ri+4], R12 = meshData.R_cam2world[ri+5];
+                    const R20 = meshData.R_cam2world[ri+6], R21 = meshData.R_cam2world[ri+7], R22 = meshData.R_cam2world[ri+8];
+                    const tx = meshData.t_cam2world[ti+0], ty = meshData.t_cam2world[ti+1], tz = meshData.t_cam2world[ti+2];
+                    trajectoryCamera.matrixWorld.set(
+                        R00, -R01, -R02, tx,
+                        R10, -R11, -R12, ty,
+                        R20, -R21, -R22, tz,
+                        0,    0,    0,   1
+                    );
+                    trajectoryCamera.matrixWorldInverse.copy(trajectoryCamera.matrixWorld).invert();
+                }
+            } else {
+                // Exterior mode: position the camera frustum using R_cam2world
+                const ri = f * 9;
+                const ti = f * 3;
+                const R00 = meshData.R_cam2world[ri+0], R01 = meshData.R_cam2world[ri+1], R02 = meshData.R_cam2world[ri+2];
+                const R10 = meshData.R_cam2world[ri+3], R11 = meshData.R_cam2world[ri+4], R12 = meshData.R_cam2world[ri+5];
+                const R20 = meshData.R_cam2world[ri+6], R21 = meshData.R_cam2world[ri+7], R22 = meshData.R_cam2world[ri+8];
+                const tx = meshData.t_cam2world[ti+0], ty = meshData.t_cam2world[ti+1], tz = meshData.t_cam2world[ti+2];
+                trajectoryCamera.matrixWorld.set(
+                    R00, -R01, -R02, tx,
+                    R10, -R11, -R12, ty,
+                    R20, -R21, -R22, tz,
+                    0,    0,    0,   1
+                );
+                trajectoryCamera.matrixWorldInverse.copy(trajectoryCamera.matrixWorld).invert();
+            }
+
+            // Update frustum helper if it exists
+            if (cameraFrustum) {
+                cameraFrustum.update();
+            }
+        }
+
+        function updateFrame(frame) {
+            if (!meshData || !smplMesh) return;
+
+            const f = Math.min(Math.floor(frame), meshData.numFrames - 1);
+            const start = f * meshData.numVerts * 3;
+            const end = start + meshData.numVerts * 3;
+
+            // Use incam vertices in through-camera mode (if available), otherwise global
+            const useIncam = cameraMode === 'through_camera' && meshData.incamVertices;
+            const vertSource = useIncam ? meshData.incamVertices : meshData.vertices;
+            const frameVerts = vertSource.subarray(start, end);
+            smplMesh.geometry.attributes.position.array.set(frameVerts);
+            smplMesh.geometry.attributes.position.needsUpdate = true;
+            smplMesh.geometry.computeVertexNormals();
+
+            if (meshData.hasCamera && (cameraMode === 'through_camera' || cameraMode === 'exterior')) {
+                setCameraFromFrame(f);
+            }
+        }
+
+        function sendFrameUpdate() {
+            window.parent.postMessage({
+                type: 'frameChanged',
+                frame: Math.floor(currentFrame),
+                totalFrames: meshData ? meshData.numFrames : 0
+            }, '*');
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (cameraMode !== 'through_camera') {
+                orbitControls.update();
+            }
+
+            if (isPlaying && meshData && meshData.numFrames > 0) {
+                const delta = clock.getDelta();
+                const fps = meshData.fps || 30;
+                currentFrame += delta * fps * speed;
+                if (currentFrame >= meshData.numFrames) {
+                    currentFrame = 0;
+                }
+                updateFrame(currentFrame);
+                sendFrameUpdate();
+            }
+
+            // Render with the active camera
+            const container = document.getElementById('canvas-container');
+            const cw = container.clientWidth;
+            const ch = container.clientHeight;
+
+            if (cameraMode === 'through_camera' && meshData && meshData.hasCamera) {
+                // Letterbox/pillarbox to match camera aspect ratio
+                const camAspect = meshData.imgWidth / meshData.imgHeight;
+                const vpAspect = cw / ch;
+                let vx, vy, vw, vh;
+                if (vpAspect > camAspect) {
+                    // Viewport wider than camera -> pillarbox (black bars on sides)
+                    vh = ch;
+                    vw = Math.round(ch * camAspect);
+                    vx = Math.round((cw - vw) / 2);
+                    vy = 0;
+                } else {
+                    // Viewport taller than camera -> letterbox (black bars top/bottom)
+                    vw = cw;
+                    vh = Math.round(cw / camAspect);
+                    vx = 0;
+                    vy = Math.round((ch - vh) / 2);
+                }
+                renderer.setScissorTest(true);
+                renderer.setScissor(vx, vy, vw, vh);
+                renderer.setViewport(vx, vy, vw, vh);
+                renderer.setClearColor(0x000000);
+                renderer.clear();
+                renderer.render(scene, trajectoryCamera);
+                renderer.setScissorTest(false);
+            } else {
+                renderer.setViewport(0, 0, cw, ch);
+                renderer.render(scene, orbitCamera);
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
