@@ -200,6 +200,12 @@ VIEWER_FILES = {
         "html": ("viewer_fbx_animation.html", ""),
         "widget": ("fbx_animation_viewer.js", "js/"),
     },
+    "pointcloud_vtk": {
+        "html": ("viewer_vtk.html", ""),
+        "bundle": ("vtk-gltf.js", "libs/"),
+        "widget": ("pointcloud_preview_vtk.js", "js/"),
+        "utils": True,
+    },
 }
 
 
@@ -213,11 +219,26 @@ def copy_viewer(viewer: str, target_dir) -> None:
     if not files:
         raise ValueError(f"Unknown viewer: {viewer}")
 
-    for file_type, (filename, subdir) in files.items():
+    for file_type, value in files.items():
+        # Handle utils directory copy
+        if file_type == "utils" and value is True:
+            src_utils = Path(get_utils_dir())
+            dst_utils = target_dir / "js" / "utils"
+            dst_utils.mkdir(parents=True, exist_ok=True)
+            for f in src_utils.glob("*.js"):
+                dst = dst_utils / f.name
+                if not dst.exists() or f.stat().st_mtime > dst.stat().st_mtime:
+                    shutil.copy2(f, dst)
+            continue
+
+        filename, subdir = value
         if file_type == "html":
             src = os.path.join(get_html_dir(), filename)
         elif file_type == "bundle":
+            # Check both three/ and js/ directories for bundles
             src = os.path.join(get_three_dir(), filename)
+            if not os.path.exists(src):
+                src = os.path.join(get_js_dir(), filename)
         elif file_type == "widget":
             src = os.path.join(get_nodes_dir(), filename)
         else:
