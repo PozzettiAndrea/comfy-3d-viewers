@@ -30,12 +30,12 @@ function project3D(point, camera) {
     const fwdLen = Math.sqrt(fwdX*fwdX + fwdY*fwdY + fwdZ*fwdZ);
     const fx = fwdX/fwdLen, fy = fwdY/fwdLen, fz = fwdZ/fwdLen;
 
-    // Right vector = up(0,1,0) × forward = (fz, 0, -fx)
+    // Right vector = up(0,1,0) x forward = (fz, 0, -fx)
     const rxRaw = fz, rzRaw = -fx;
     const rLen = Math.sqrt(rxRaw*rxRaw + rzRaw*rzRaw) || 1;
     const rx = rxRaw/rLen, rz = rzRaw/rLen;
 
-    // Up vector = right × forward = (-rz*fy, rz*fx - rx*fz, rx*fy)
+    // Up vector = right x forward = (-rz*fy, rz*fx - rx*fz, rx*fy)
     const ux = -rz * fy;
     const uy = rz * fx - rx * fz;
     const uz = rx * fy;

@@ -1051,7 +1051,7 @@
                     // Connectivity inspection mode - color by neighbor count
                     const numTriangles = indices.length / 3;
 
-                    // Build face ID → neighbor count mapping from analysis data
+                    // Build face ID -> neighbor count mapping from analysis data
                     const faceNeighborCounts = {};
                     if (analysisData && analysisData.faces) {
                         for (const face of analysisData.faces) {

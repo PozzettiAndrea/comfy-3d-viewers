@@ -950,7 +950,7 @@
             const planarity = plotData.planarity;
             if (planarity) {
                 const devStr = planarity.deviation_percent < 0.01 ?
-                    'exact' : `±${planarity.deviation_percent.toFixed(2)}%`;
+                    'exact' : `+/-${planarity.deviation_percent.toFixed(2)}%`;
                 document.getElementById('info-plane').textContent = `${planarity.plane} (${devStr})`;
             }
 

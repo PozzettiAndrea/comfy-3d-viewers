@@ -63,7 +63,7 @@ app.registerExtension({
 
                 // Previous button
                 const prevButton = document.createElement("button");
-                prevButton.textContent = "◀ Previous";
+                prevButton.textContent = "< Previous";
                 prevButton.style.padding = "4px 12px";
                 prevButton.style.cursor = "pointer";
                 prevButton.style.backgroundColor = "#333";
@@ -82,7 +82,7 @@ app.registerExtension({
 
                 // Next button
                 const nextButton = document.createElement("button");
-                nextButton.textContent = "Next ▶";
+                nextButton.textContent = "Next >";
                 nextButton.style.padding = "4px 12px";
                 nextButton.style.cursor = "pointer";
                 nextButton.style.backgroundColor = "#333";
@@ -305,7 +305,7 @@ app.registerExtension({
                         // Format extents
                         let extentsStr = 'N/A';
                         if (extents.length === 3) {
-                            extentsStr = `${extents.map(v => v.toFixed(2)).join(' × ')}`;
+                            extentsStr = `${extents.map(v => v.toFixed(2)).join(' x ')}`;
                         }
 
                         // Build info HTML

@@ -23,7 +23,7 @@ export const StandardControls = {
     settingsButton: {
         id: 'settingsButton',
         type: ControlTypes.BUTTON,
-        label: '⚙',
+        label: '[Settings]',
         title: 'Appearance Settings'
     },
     divider: {

@@ -147,7 +147,7 @@ app.registerExtension({
                         // Update info panel
                         infoPanel.innerHTML = `
                             <div style="margin-bottom: 4px;"><strong>CAD Model Info</strong></div>
-                            <div>Format: ${originalFormat} → ${format}</div>
+                            <div>Format: ${originalFormat} -> ${format}</div>
                             <div>Topology: ${numVolumes} volumes, ${numFaces} faces, ${numEdges} edges</div>
                             <div>Deflection: ${linearDeflection}</div>
                             <div>Extents: [${extents.map(v => v.toFixed(2)).join(', ')}]</div>

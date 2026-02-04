@@ -28,7 +28,7 @@ export function formatExtents(extents, decimals = 2) {
     if (!extents || extents.length !== 3) {
         return 'N/A';
     }
-    return extents.map(v => v.toFixed(decimals)).join(' × ');
+    return extents.map(v => v.toFixed(decimals)).join(' x ');
 }
 
 /**

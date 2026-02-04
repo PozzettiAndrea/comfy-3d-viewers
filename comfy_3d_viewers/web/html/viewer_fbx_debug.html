@@ -787,9 +787,9 @@
                 document.getElementById('localPosY').textContent = formatNum(bone.position.y);
                 document.getElementById('localPosZ').textContent = formatNum(bone.position.z);
 
-                document.getElementById('localRotX').textContent = radToDeg(euler.x) + '°';
-                document.getElementById('localRotY').textContent = radToDeg(euler.y) + '°';
-                document.getElementById('localRotZ').textContent = radToDeg(euler.z) + '°';
+                document.getElementById('localRotX').textContent = radToDeg(euler.x) + 'deg';
+                document.getElementById('localRotY').textContent = radToDeg(euler.y) + 'deg';
+                document.getElementById('localRotZ').textContent = radToDeg(euler.z) + 'deg';
 
                 document.getElementById('localQuat').textContent =
                     `(${formatNum(bone.quaternion.x, 3)}, ${formatNum(bone.quaternion.y, 3)}, ${formatNum(bone.quaternion.z, 3)}, ${formatNum(bone.quaternion.w, 3)})`;
@@ -799,7 +799,7 @@
 
                 // Roll angle (Z-rotation in local space)
                 const rollDeg = radToDeg(euler.z);
-                document.getElementById('boneRoll').textContent = rollDeg + '°';
+                document.getElementById('boneRoll').textContent = rollDeg + 'deg';
 
                 // World transforms
                 const worldPos = new THREE.Vector3();
@@ -813,9 +813,9 @@
                 document.getElementById('worldPosY').textContent = formatNum(worldPos.y);
                 document.getElementById('worldPosZ').textContent = formatNum(worldPos.z);
 
-                document.getElementById('worldRotX').textContent = radToDeg(worldEuler.x) + '°';
-                document.getElementById('worldRotY').textContent = radToDeg(worldEuler.y) + '°';
-                document.getElementById('worldRotZ').textContent = radToDeg(worldEuler.z) + '°';
+                document.getElementById('worldRotX').textContent = radToDeg(worldEuler.x) + 'deg';
+                document.getElementById('worldRotY').textContent = radToDeg(worldEuler.y) + 'deg';
+                document.getElementById('worldRotZ').textContent = radToDeg(worldEuler.z) + 'deg';
 
                 // Bone length (distance to first child)
                 let boneLength = 0;

@@ -171,7 +171,7 @@ app.registerExtension({
                         // Format extents
                         let extentsStr = 'N/A';
                         if (extents.length === 3) {
-                            extentsStr = `${extents.map(v => v.toFixed(2)).join(' × ')}`;
+                            extentsStr = `${extents.map(v => v.toFixed(2)).join(' x ')}`;
                         }
 
                         // Build info HTML

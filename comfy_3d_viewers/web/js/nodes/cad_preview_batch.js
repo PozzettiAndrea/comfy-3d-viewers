@@ -60,7 +60,7 @@ app.registerExtension({
                 };
 
                 // Previous button
-                const prevButton = createButton("◀");
+                const prevButton = createButton("<");
                 prevButton.title = "Previous";
 
                 // Index display
@@ -73,7 +73,7 @@ app.registerExtension({
                 indexLabel.style.fontSize = "11px";
 
                 // Next button
-                const nextButton = createButton("▶");
+                const nextButton = createButton(">");
                 nextButton.title = "Next";
 
                 // Separator
@@ -266,7 +266,7 @@ app.registerExtension({
                         // Update info panel
                         infoPanel.innerHTML = `
                             <div style="margin-bottom: 4px;"><strong>CAD Model Info (${currentIndex + 1}/${currentBatchSize})</strong></div>
-                            <div>Format: ${originalFormat} → ${format}</div>
+                            <div>Format: ${originalFormat} -> ${format}</div>
                             <div>Topology: ${numVolumes} volumes, ${numFaces} faces, ${numEdges} edges</div>
                             <div>Deflection: ${linearDeflection}</div>
                             <div>Extents: [${extents.map(v => v.toFixed(2)).join(', ')}]</div>

@@ -244,7 +244,7 @@ export class FieldVisualization {
             });
 
             // Add separator
-            options.push({ value: '', label: '──────────', disabled: true });
+            options.push({ value: '', label: '----------', disabled: true });
 
             // Add remaining colormaps
             allPresets

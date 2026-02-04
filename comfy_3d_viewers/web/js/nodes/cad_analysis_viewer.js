@@ -65,7 +65,7 @@ function createViewerWidget(node, nodeType) {
         batchNavBar.style.flexShrink = "0";
 
         // Previous button
-        const prevButton = createButton("◀");
+        const prevButton = createButton("<");
         prevButton.title = "Previous";
 
         // Index display
@@ -78,7 +78,7 @@ function createViewerWidget(node, nodeType) {
         indexLabel.style.fontSize = "11px";
 
         // Next button
-        const nextButton = createButton("▶");
+        const nextButton = createButton(">");
         nextButton.title = "Next";
 
         // Assemble batch navigation bar
@@ -149,7 +149,7 @@ function createViewerWidget(node, nodeType) {
         fitButton.title = "Fit to View";
 
         // Settings button
-        const settingsButton = createButton("⚙");
+        const settingsButton = createButton("[Settings]");
         settingsButton.title = "Settings";
         settingsButton.style.fontSize = "14px";
         settingsButton.style.padding = "2px 6px";
@@ -311,7 +311,7 @@ function createViewerWidget(node, nodeType) {
                     <span>${meshFile}</span>
 
                     <span style="color: #888;">Format:</span>
-                    <span>${originalFormat} → ${format}</span>
+                    <span>${originalFormat} -> ${format}</span>
 
                     <span style="color: #888;">Topology:</span>
                     <span>${numVolumes} volumes, ${numFaces} faces, ${numEdges} edges</span>

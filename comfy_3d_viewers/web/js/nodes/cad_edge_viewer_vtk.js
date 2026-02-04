@@ -300,10 +300,10 @@ function createVTKEdgeViewerWidget(node, nodeType) {
                             planarStr = `${plane} (exact)`;
                             planarColor = '#44ff88';
                         } else if (dev < 0.001) {
-                            planarStr = `${plane} (±${dev.toExponential(1)}, ${pctStr})`;
+                            planarStr = `${plane} (+/-${dev.toExponential(1)}, ${pctStr})`;
                             planarColor = '#44ff88';
                         } else if (dev < 0.1) {
-                            planarStr = `${plane} (±${dev.toFixed(3)}, ${pctStr})`;
+                            planarStr = `${plane} (+/-${dev.toFixed(3)}, ${pctStr})`;
                             planarColor = '#ffcc44';
                         } else {
                             planarStr = `3D (dev: ${dev.toFixed(2)}, ${pctStr})`;

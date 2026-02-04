@@ -71,7 +71,7 @@
     </div>
 
     <div id="controls">
-        <button id="settingsButton" class="settings-button" title="Appearance Settings">⚙</button>
+        <button id="settingsButton" class="settings-button" title="Appearance Settings">[Settings]</button>
 
         <span class="control-separator"></span>
 
@@ -487,13 +487,13 @@
 
                 const result = await response.json();
                 if (result.success) {
-                    saveButton.textContent = '✓ Saved!';
+                    saveButton.textContent = '[x] Saved!';
                     alert(`Mesh saved!\n\nFilename: ${result.saved_filename}\nLocation: ComfyUI/output/`);
                 } else {
                     throw new Error(result.error);
                 }
             } catch (error) {
-                saveButton.textContent = '✗ Error';
+                saveButton.textContent = '[ ] Error';
                 alert(`Error: ${error.message}`);
             } finally {
                 setTimeout(() => {
