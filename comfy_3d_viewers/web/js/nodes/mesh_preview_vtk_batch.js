@@ -22,6 +22,8 @@ app.registerExtension({
             nodeType.prototype.onNodeCreated = function() {
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
 
+                // Viewer state persisted via DOM widget serialization
+                const viewerState = { show_edges: false };
 
                 // Create container for viewer + navigation + info panel
                 const container = document.createElement("div");
@@ -117,8 +119,10 @@ app.registerExtension({
                 // Add widget with required options
 
                 const widget = this.addDOMWidget("preview_vtk_batch", "MESH_PREVIEW_VTK_BATCH", container, {
-                    getValue() { return ""; },
-                    setValue(v) { }
+                    getValue() { return JSON.stringify(viewerState); },
+                    setValue(v) {
+                        try { Object.assign(viewerState, JSON.parse(v)); } catch(e) {}
+                    }
                 });
 
 
@@ -129,19 +133,14 @@ app.registerExtension({
                 this.meshInfoPanelVTKBatch = infoPanel;
                 this.meshNavBarVTKBatch = navBar;
 
-                // Hide show_edges widget from node UI (viewer checkbox is the only control)
-                const showEdgesWidget = this.widgets?.find(w => w.name === 'show_edges');
-                if (showEdgesWidget) {
-                    showEdgesWidget.hidden = true;
-                    this.setSize(this.computeSize());
-                }
-
-                // Bidirectional sync: viewer checkbox → node widget
+                // Bidirectional sync: viewer → node widgets (viewerState + real widgets)
                 const node = this;
                 window.addEventListener('message', (event) => {
-                    if (event.data.type === 'WIDGET_UPDATE' && event.data.widget === 'show_edges') {
-                        const w = node.widgets?.find(w => w.name === 'show_edges');
-                        if (w) w.value = event.data.value;
+                    if (event.data.type === 'WIDGET_UPDATE') {
+                        const { widget: name, value } = event.data;
+                        if (name in viewerState) viewerState[name] = value;
+                        const w = node.widgets?.find(w => w.name === name);
+                        if (w) w.value = value;
                     }
                 });
 
@@ -414,7 +413,7 @@ app.registerExtension({
                                     type: "LOAD_MESH",
                                     filepath: filepath,
                                     timestamp: Date.now(),
-                                    showEdges: message.show_edges?.[0] || false,
+                                    showEdges: viewerState.show_edges,
                                 }, "*");
                             } else {
                                 console.error("[GeomPack VTK Batch] Iframe contentWindow not available");
