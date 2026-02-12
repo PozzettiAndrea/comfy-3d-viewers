@@ -79,11 +79,11 @@ app.registerExtension({
 
             // --- Single container widget ---
             const container = document.createElement("div");
-            container.style.cssText = "background:#1a1a2e; border:1px solid #333; border-radius:4px; overflow:hidden;";
+            container.style.cssText = "background:#1a1a2e; border:1px solid #333; border-radius:4px; overflow:hidden; display:flex; flex-direction:column; height:100%;";
 
             // Header bar (always visible, top of box)
             const header = document.createElement("div");
-            header.style.cssText = "display:flex; align-items:center; gap:6px; padding:2px 8px; cursor:pointer; user-select:none; font-size:11px; color:#888;";
+            header.style.cssText = "display:flex; align-items:center; gap:6px; padding:2px 8px; cursor:pointer; user-select:none; font-size:11px; color:#888; flex-shrink:0;";
 
             const arrow = document.createElement("span");
             arrow.style.cssText = "font-size:8px; display:inline-block; transition:transform 0.15s;";
@@ -97,15 +97,15 @@ app.registerExtension({
 
             // Content area (hidden when collapsed)
             const content = document.createElement("div");
-            content.style.cssText = "padding:6px 8px; border-top:1px solid #333; font-size:11px; color:#ccc; display:none; overflow-y:auto;";
+            content.style.cssText = "padding:6px 8px; border-top:1px solid #333; font-size:11px; color:#ccc; display:none; overflow-y:auto; flex:1; min-height:0;";
 
             container.appendChild(header);
             container.appendChild(content);
 
             // Use getMinHeight/getHeight — the API ComfyUI's DOMWidgetImpl actually reads
             const widget = this.addDOMWidget("report_panel", "REPORT_PANEL", container, {
-                getValue() { return ""; },
-                setValue(v) { },
+                getValue() { return expanded ? "true" : "false"; },
+                setValue(v) { if (v === "true") setExpanded(true); },
                 getMinHeight: () => widgetHeight,
                 getHeight: () => widgetHeight,
             });
@@ -122,12 +122,16 @@ app.registerExtension({
                 node.setDirtyCanvas(true, true);
             }
 
-            // Toggle click
-            header.addEventListener("click", () => {
-                expanded = !expanded;
+            function setExpanded(val) {
+                expanded = val;
                 content.style.display = expanded ? "block" : "none";
                 arrow.style.transform = expanded ? "rotate(90deg)" : "";
                 resize();
+            }
+
+            // Toggle click
+            header.addEventListener("click", () => {
+                setExpanded(!expanded);
             });
 
             // Execution results
@@ -141,9 +145,6 @@ app.registerExtension({
 
                     const firstLine = text.split("\n")[0].trim();
                     if (firstLine) label.textContent = firstLine;
-
-                    const lineCount = (text.match(/\n/g) || []).length + 1;
-                    contentHeight = Math.min(Math.max(80, lineCount * 14 + 20), 300);
 
                     resize();
                 }
