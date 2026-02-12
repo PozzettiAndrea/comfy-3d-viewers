@@ -5,7 +5,7 @@
 
 import { app } from "../../../scripts/app.js";
 import { EXTENSION_FOLDER, getViewerUrl } from "./utils/extensionFolder.js";
-import { createContainer, createIframe, createInfoPanel, showPanelError, createWidgetOptions } from "./utils/uiComponents.js";
+import { createContainer, createIframe, createInfoPanel, showPanelError } from "./utils/uiComponents.js";
 import { buildMeshInfoHTML } from "./utils/formatting.js";
 import { createScreenshotHandler } from "./utils/screenshot.js";
 import { createViewerManager, createErrorHandler, buildViewUrl } from "./utils/postMessage.js";
@@ -19,6 +19,9 @@ app.registerExtension({
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function() {
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
+
+                // Viewer state persisted via DOM widget serialization
+                const viewerState = { show_edges: false, camera_state: "", selected_field: "" };
 
                 // Create container for viewer + info panel
                 const container = createContainer();
@@ -34,26 +37,28 @@ app.registerExtension({
                 container.appendChild(infoPanel);
 
                 // Add widget
-                const widget = this.addDOMWidget("preview_vtk", "MESH_PREVIEW_VTK", container, createWidgetOptions());
+                const widget = this.addDOMWidget("preview_vtk", "MESH_PREVIEW_VTK", container, {
+                    getValue() { return JSON.stringify(viewerState); },
+                    setValue(v) {
+                        try { Object.assign(viewerState, JSON.parse(v)); } catch(e) {}
+                    }
+                });
                 widget.computeSize = () => [512, 640];
 
                 // Store references
                 this.meshViewerIframeVTK = iframe;
                 this.meshInfoPanelVTK = infoPanel;
 
-                // Hide viewer-managed widgets from node UI
-                for (const name of ['show_edges', 'camera_state', 'selected_field']) {
-                    const w = this.widgets?.find(w => w.name === name);
-                    if (w) w.hidden = true;
-                }
                 this.setSize(this.computeSize());
 
-                // Bidirectional sync: viewer → node widgets
+                // Bidirectional sync: viewer → node widgets (viewerState + real widgets)
                 const node = this;
                 window.addEventListener('message', (event) => {
                     if (event.data.type === 'WIDGET_UPDATE') {
-                        const w = node.widgets?.find(w => w.name === event.data.widget);
-                        if (w) w.value = event.data.value;
+                        const { widget: name, value } = event.data;
+                        if (name in viewerState) viewerState[name] = value;
+                        const w = node.widgets?.find(w => w.name === name);
+                        if (w) w.value = value;
                     }
                 });
 
@@ -110,9 +115,9 @@ app.registerExtension({
                             type: "LOAD_MESH",
                             filepath: filepath,
                             timestamp: Date.now(),
-                            showEdges: message.show_edges?.[0] || false,
-                            cameraState: message.camera_state?.[0] || "",
-                            selectedField: message.selected_field?.[0] || "",
+                            showEdges: viewerState.show_edges,
+                            cameraState: viewerState.camera_state,
+                            selectedField: viewerState.selected_field,
                         };
 
                         // Switch viewer if needed and send message

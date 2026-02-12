@@ -6,7 +6,7 @@
 
 import { app } from "../../../scripts/app.js";
 import { EXTENSION_FOLDER, getViewerUrl } from "./utils/extensionFolder.js";
-import { createContainer, createIframe, createInfoPanel, createWidgetOptions } from "./utils/uiComponents.js";
+import { createContainer, createIframe, createInfoPanel } from "./utils/uiComponents.js";
 import { buildDualMeshInfoHTML, formatExtents } from "./utils/formatting.js";
 import { createViewerManager, createErrorHandler, buildViewUrl, createLoadDualMeshMessage } from "./utils/postMessage.js";
 
@@ -18,6 +18,9 @@ app.registerExtension({
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function() {
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
+
+                // Viewer state persisted via DOM widget serialization
+                const viewerState = { show_edges: false, camera_state: "", selected_field: "" };
 
                 // Create container for viewer + info panel
                 const container = createContainer();
@@ -33,26 +36,28 @@ app.registerExtension({
                 container.appendChild(infoPanel);
 
                 // Add widget
-                const widget = this.addDOMWidget("preview_dual", "MESH_PREVIEW_DUAL", container, createWidgetOptions());
+                const widget = this.addDOMWidget("preview_dual", "MESH_PREVIEW_DUAL", container, {
+                    getValue() { return JSON.stringify(viewerState); },
+                    setValue(v) {
+                        try { Object.assign(viewerState, JSON.parse(v)); } catch(e) {}
+                    }
+                });
                 widget.computeSize = () => [768, 680];
 
                 // Store references
                 this.meshViewerIframeDual = iframe;
                 this.meshInfoPanelDual = infoPanel;
 
-                // Hide viewer-managed widgets from node UI
-                for (const name of ['show_edges', 'camera_state', 'selected_field']) {
-                    const w = this.widgets?.find(w => w.name === name);
-                    if (w) w.hidden = true;
-                }
                 this.setSize(this.computeSize());
 
-                // Bidirectional sync: viewer → node widgets
+                // Bidirectional sync: viewer → node widgets (viewerState + real widgets like opacity)
                 const node = this;
                 window.addEventListener('message', (event) => {
                     if (event.data.type === 'WIDGET_UPDATE') {
-                        const w = node.widgets?.find(w => w.name === event.data.widget);
-                        if (w) w.value = event.data.value;
+                        const { widget: name, value } = event.data;
+                        if (name in viewerState) viewerState[name] = value;
+                        const w = node.widgets?.find(w => w.name === name);
+                        if (w) w.value = value;
                     }
                 });
 
@@ -127,9 +132,9 @@ app.registerExtension({
                             mesh2Filepath: buildViewUrl(message.mesh_2_file[0]),
                             opacity1: message.opacity_1?.[0] || 1.0,
                             opacity2: message.opacity_2?.[0] || 1.0,
-                            showEdges: message.show_edges?.[0] || false,
-                            cameraState: message.camera_state?.[0] || "",
-                            selectedField: message.selected_field?.[0] || "",
+                            showEdges: viewerState.show_edges,
+                            cameraState: viewerState.camera_state,
+                            selectedField: viewerState.selected_field,
                         });
 
                     } else {
@@ -162,9 +167,9 @@ app.registerExtension({
                             meshFilepath: buildViewUrl(message.mesh_file[0]),
                             opacity1: message.opacity_1?.[0] || 1.0,
                             opacity2: message.opacity_2?.[0] || 1.0,
-                            showEdges: message.show_edges?.[0] || false,
-                            cameraState: message.camera_state?.[0] || "",
-                            selectedField: message.selected_field?.[0] || "",
+                            showEdges: viewerState.show_edges,
+                            cameraState: viewerState.camera_state,
+                            selectedField: viewerState.selected_field,
                         });
                     }
 
