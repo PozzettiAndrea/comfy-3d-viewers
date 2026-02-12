@@ -267,6 +267,13 @@
                     <input type="checkbox" id="parallelProjectionSetting"> Parallel Projection
                 </label>
             </div>
+            <div class="setting-row" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #444;">
+                <label style="font-weight: bold; color: #aaa;">Colormap:</label>
+            </div>
+            <div class="setting-row">
+                <label>Preset:</label>
+                <select id="colormapSelector" style="width: 140px;"></select>
+            </div>
             <div class="button-row">
                 <button id="applySettings">Apply</button>
                 <button id="cancelSettings">Cancel</button>
@@ -319,10 +326,6 @@
             <label id="sharedFieldLabel" style="display:none;">
                 Field:
                 <select id="sharedFieldSelector"></select>
-            </label>
-            <label id="colormapLabel" style="display:none;">
-                Colormap:
-                <select id="colormapSelector"></select>
             </label>
         </div>
     </div>
@@ -882,21 +885,17 @@
             const field1Label = document.getElementById('field1Label');
             const field2Label = document.getElementById('field2Label');
             const sharedFieldLabel = document.getElementById('sharedFieldLabel');
-            const colormapLabel = document.getElementById('colormapLabel');
 
             // Hide all
             field1Label.style.display = 'none';
             field2Label.style.display = 'none';
             sharedFieldLabel.style.display = 'none';
-            colormapLabel.style.display = 'none';
 
             if (fieldMode === 'independent' && viewerLayout === 'side_by_side') {
                 field1Label.style.display = 'flex';
                 field2Label.style.display = 'flex';
-                colormapLabel.style.display = 'flex';
             } else if (fieldMode === 'synchronized') {
                 sharedFieldLabel.style.display = 'flex';
-                colormapLabel.style.display = 'flex';
             }
         }
 
