@@ -23,6 +23,9 @@ app.registerExtension({
             nodeType.prototype.onNodeCreated = function() {
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
 
+                // Viewer state persisted via DOM widget serialization
+                const viewerState = { show_edges: false, camera_state: "", selected_field: "" };
+
                 console.log('[GeomPack Multi JS] Creating PreviewMeshMulti node widget');
 
                 // Create container for viewer + info panel
@@ -60,8 +63,10 @@ app.registerExtension({
 
                 // Add widget
                 const widget = this.addDOMWidget("preview_multi", "MESH_PREVIEW_MULTI", container, {
-                    getValue() { return ""; },
-                    setValue(v) { }
+                    getValue() { return JSON.stringify(viewerState); },
+                    setValue(v) {
+                        try { Object.assign(viewerState, JSON.parse(v)); } catch(e) {}
+                    }
                 });
 
                 widget.computeSize = () => [768, 580];
@@ -70,19 +75,16 @@ app.registerExtension({
                 this.meshViewerIframeMulti = iframe;
                 this.meshInfoPanelMulti = infoPanel;
 
-                // Hide viewer-managed widgets from node UI
-                for (const name of ['show_edges', 'camera_state', 'selected_field']) {
-                    const w = this.widgets?.find(w => w.name === name);
-                    if (w) w.hidden = true;
-                }
                 this.setSize(this.computeSize());
 
-                // Bidirectional sync: viewer → node widgets
+                // Bidirectional sync: viewer → node widgets (viewerState + real widgets)
                 const node = this;
                 window.addEventListener('message', (event) => {
                     if (event.data.type === 'WIDGET_UPDATE') {
-                        const w = node.widgets?.find(w => w.name === event.data.widget);
-                        if (w) w.value = event.data.value;
+                        const { widget: name, value } = event.data;
+                        if (name in viewerState) viewerState[name] = value;
+                        const w = node.widgets?.find(w => w.name === name);
+                        if (w) w.value = value;
                     }
                 });
 
@@ -139,9 +141,9 @@ app.registerExtension({
                         numMeshes: numMeshes,
                         meshFiles: filepaths,
                         timestamp: Date.now(),
-                        showEdges: message.show_edges?.[0] || false,
-                        cameraState: message.camera_state?.[0] || "",
-                        selectedField: message.selected_field?.[0] || "",
+                        showEdges: viewerState.show_edges,
+                        cameraState: viewerState.camera_state,
+                        selectedField: viewerState.selected_field,
                     };
 
                     // Send message to iframe
