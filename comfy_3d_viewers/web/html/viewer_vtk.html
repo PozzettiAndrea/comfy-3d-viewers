@@ -415,7 +415,6 @@
             const fieldSelector = document.getElementById('fieldSelector');
             const fieldLabel = document.getElementById('fieldLabel');
             const colormapSelector = document.getElementById('colormapSelector');
-            const colormapLabel = document.getElementById('colormapLabel');
 
             fieldSelector.innerHTML = '<option value="">None</option>';
 
@@ -447,13 +446,10 @@
                     colormapSelector.appendChild(option);
                 });
 
-                colormapLabel.style.display = 'flex';
-
                 // Default to "None" - don't auto-select any field
                 // fieldSelector.value stays as "" (None option)
             } else {
                 fieldLabel.style.display = 'none';
-                colormapLabel.style.display = 'none';
             }
 
             // Reset channel selector

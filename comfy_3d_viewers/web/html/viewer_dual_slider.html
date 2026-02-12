@@ -139,6 +139,108 @@
             background: #444;
             margin: 0 8px;
         }
+
+        /* Settings panel */
+        #settingsPanel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1a1a1a;
+            border: 1px solid #555;
+            border-radius: 6px;
+            padding: 16px;
+            z-index: 2000;
+            display: none;
+            min-width: 280px;
+            max-height: 80%;
+            overflow-y: auto;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+        #settingsPanel.visible {
+            display: block;
+        }
+        #settingsPanel h3 {
+            margin: 0 0 12px 0;
+            color: #ccc;
+            font-size: 14px;
+            font-weight: normal;
+            border-bottom: 1px solid #333;
+            padding-bottom: 8px;
+        }
+        #settingsPanel .setting-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        #settingsPanel .setting-row label {
+            flex: 0 0 100px;
+            color: #ccc;
+            font-size: 12px;
+        }
+        #settingsPanel .setting-row input[type="color"] {
+            flex: 1;
+            height: 32px;
+            border: 1px solid #555;
+            background: #333;
+            cursor: pointer;
+        }
+        #settingsPanel .setting-row input[type="number"] {
+            flex: 1;
+            background: #333;
+            color: #ccc;
+            border: 1px solid #555;
+            padding: 6px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+        #settingsPanel .setting-row select {
+            flex: 1;
+            background: #333;
+            color: #ccc;
+            border: 1px solid #555;
+            padding: 6px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+        #settingsPanel .button-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid #333;
+        }
+        #settingsPanel .button-row button {
+            flex: 1;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        #settingsOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1999;
+            display: none;
+        }
+        #settingsOverlay.visible {
+            display: block;
+        }
+        #settingsButton {
+            background: #333;
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
@@ -157,9 +259,62 @@
         </div>
 
         <div id="loading">Ready to load meshes</div>
+
+        <!-- Settings overlay and panel -->
+        <div id="settingsOverlay"></div>
+        <div id="settingsPanel">
+            <h3>Appearance Settings</h3>
+            <div class="setting-row">
+                <label>Point Size:</label>
+                <input type="number" id="pointSize" min="1" max="20" step="1" value="10">
+            </div>
+            <div class="setting-row">
+                <label>Mesh Color:</label>
+                <input type="color" id="meshColor" value="#99ccff">
+            </div>
+            <div class="setting-row">
+                <label>Edge Width:</label>
+                <input type="number" id="edgeWidth" min="1" max="10" step="1" value="1">
+            </div>
+            <div class="setting-row">
+                <label>Render Mode:</label>
+                <select id="representationSettings">
+                    <option value="2">Surface</option>
+                    <option value="1">Wireframe</option>
+                    <option value="0">Points</option>
+                </select>
+            </div>
+            <div class="setting-row">
+                <label>
+                    <input type="checkbox" id="parallelProjectionSetting"> Parallel Projection
+                </label>
+            </div>
+            <div class="setting-row" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #444;">
+                <label style="font-weight: bold; color: #aaa;">Colormap:</label>
+            </div>
+            <div class="setting-row">
+                <label>Preset:</label>
+                <select id="colormapSelector">
+                    <option value="erdc_rainbow_bright">Rainbow</option>
+                    <option value="Cool to Warm">Cool to Warm</option>
+                    <option value="Viridis (matplotlib)">Viridis</option>
+                    <option value="Plasma (matplotlib)">Plasma</option>
+                    <option value="Grayscale">Grayscale</option>
+                </select>
+            </div>
+            <div class="button-row">
+                <button id="applySettings">Apply</button>
+                <button id="cancelSettings">Cancel</button>
+            </div>
+        </div>
     </div>
 
     <div id="controls">
+        <!-- Settings button -->
+        <button id="settingsButton" title="Appearance Settings">[Settings]</button>
+
+        <span class="divider"></span>
+
         <label>
             <input type="checkbox" id="showEdges"> Edges
         </label>
@@ -183,16 +338,6 @@
         <label id="fieldLabel" style="display:none;">
             Field:
             <select id="fieldSelector"></select>
-        </label>
-        <label id="colormapLabel" style="display:none;">
-            Colormap:
-            <select id="colormapSelector">
-                <option value="erdc_rainbow_bright">Rainbow</option>
-                <option value="Cool to Warm">Cool to Warm</option>
-                <option value="Viridis (matplotlib)">Viridis</option>
-                <option value="Plasma (matplotlib)">Plasma</option>
-                <option value="Grayscale">Grayscale</option>
-            </select>
         </label>
     </div>
 
@@ -625,7 +770,6 @@
 
             const fieldSelector = document.getElementById('fieldSelector');
             const fieldLabel = document.getElementById('fieldLabel');
-            const colormapLabel = document.getElementById('colormapLabel');
 
             // Extract fields from both meshes
             const fields1 = fieldVisualization1.extractFields(mesh1Polydata);
@@ -648,7 +792,6 @@
                 });
 
                 fieldLabel.style.display = 'flex';
-                colormapLabel.style.display = 'flex';
             }
         }
 
@@ -984,6 +1127,93 @@
         document.getElementById('viewNegY').addEventListener('click', () => setCameraView('-Y'));
         document.getElementById('viewPosZ').addEventListener('click', () => setCameraView('+Z'));
         document.getElementById('viewNegZ').addEventListener('click', () => setCameraView('-Z'));
+
+        // Settings panel handlers
+        const settingsButton = document.getElementById('settingsButton');
+        const settingsPanel = document.getElementById('settingsPanel');
+        const settingsOverlay = document.getElementById('settingsOverlay');
+        const pointSizeInput = document.getElementById('pointSize');
+        const meshColorInput = document.getElementById('meshColor');
+        const edgeWidthInput = document.getElementById('edgeWidth');
+        const representationSettings = document.getElementById('representationSettings');
+        const parallelProjectionInput = document.getElementById('parallelProjectionSetting');
+        const applySettingsButton = document.getElementById('applySettings');
+        const cancelSettingsButton = document.getElementById('cancelSettings');
+
+        let currentPointSize = 3;
+        let currentMeshColor = '#99ccff';
+        let currentEdgeWidth = 1;
+        let currentRepresentation = 2;
+        let currentParallelProjection = false;
+
+        settingsButton.addEventListener('click', () => {
+            pointSizeInput.value = currentPointSize;
+            meshColorInput.value = currentMeshColor;
+            edgeWidthInput.value = currentEdgeWidth;
+            representationSettings.value = currentRepresentation.toString();
+            parallelProjectionInput.checked = currentParallelProjection;
+
+            settingsPanel.classList.add('visible');
+            settingsOverlay.classList.add('visible');
+        });
+
+        function closeSettingsPanel() {
+            settingsPanel.classList.remove('visible');
+            settingsOverlay.classList.remove('visible');
+        }
+
+        settingsOverlay.addEventListener('click', closeSettingsPanel);
+        cancelSettingsButton.addEventListener('click', closeSettingsPanel);
+
+        applySettingsButton.addEventListener('click', () => {
+            const newPointSize = parseFloat(pointSizeInput.value);
+            const newColor = meshColorInput.value;
+            const newEdgeWidth = parseFloat(edgeWidthInput.value);
+            const newRepresentation = parseInt(representationSettings.value);
+            const newParallelProjection = parallelProjectionInput.checked;
+
+            const r = parseInt(newColor.substr(1, 2), 16) / 255;
+            const g = parseInt(newColor.substr(3, 2), 16) / 255;
+            const b = parseInt(newColor.substr(5, 2), 16) / 255;
+
+            // Apply to both mesh actors
+            [mesh1Actor, mesh2Actor].forEach(actor => {
+                if (!actor) return;
+                const property = actor.getProperty();
+                property.setPointSize(newPointSize);
+                property.setColor(r, g, b);
+                property.setLineWidth(newEdgeWidth);
+                property.setRepresentation(newRepresentation);
+            });
+
+            // Apply to GLTF actors if present
+            [mesh1GltfActors, mesh2GltfActors].forEach(actors => {
+                if (!actors) return;
+                actors.forEach(actor => {
+                    const property = actor.getProperty();
+                    property.setPointSize(newPointSize);
+                    property.setLineWidth(newEdgeWidth);
+                    property.setRepresentation(newRepresentation);
+                });
+            });
+
+            // Apply parallel projection
+            [renderer1, renderer2].forEach(renderer => {
+                if (!renderer) return;
+                renderer.getActiveCamera().setParallelProjection(newParallelProjection);
+                renderer.resetCameraClippingRange();
+            });
+
+            currentPointSize = newPointSize;
+            currentMeshColor = newColor;
+            currentEdgeWidth = newEdgeWidth;
+            currentRepresentation = newRepresentation;
+            currentParallelProjection = newParallelProjection;
+
+            renderWindow1?.render();
+            renderWindow2?.render();
+            closeSettingsPanel();
+        });
 
         // Window resize
         window.addEventListener('resize', () => {
