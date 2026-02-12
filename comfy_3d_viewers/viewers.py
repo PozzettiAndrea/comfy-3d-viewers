@@ -43,6 +43,13 @@ VIEWER_FILES = {
         "utils": True,
         "viewer_modules": True,
     },
+    "vtk_batch": {
+        "html": ("viewer_vtk.html", ""),
+        "bundles": [("vtk-gltf.js", "js/"), ("viewer-bundle-vtk.js", "js/")],
+        "widget": ("mesh_preview_vtk_batch.js", "js/"),
+        "utils": True,
+        "viewer_modules": True,
+    },
     "vtk_textured": {
         "html": ("viewer_vtk_textured.html", ""),
         "bundles": [("vtk-gltf.js", "js/"), ("viewer-bundle-vtk.js", "js/")],
