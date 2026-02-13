@@ -2024,7 +2024,7 @@ void main () {
     constructor(t = null, n = null) {
       this._backgroundColor = new dt();
       const i = t || document.createElement("canvas");
-      t || (i.style.display = "block", i.style.boxSizing = "border-box", i.style.width = "100%", i.style.height = "100%", i.style.margin = "0", i.style.padding = "0", document.body.appendChild(i)), i.style.background = this._backgroundColor.toHexString(), this._canvas = i, this._gl = i.getContext("webgl2", { antialias: false });
+      t || (i.style.display = "block", i.style.boxSizing = "border-box", i.style.width = "100%", i.style.height = "100%", i.style.margin = "0", i.style.padding = "0", document.body.appendChild(i)), i.style.background = this._backgroundColor.toHexString(), this._canvas = i, this._gl = i.getContext("webgl2", { antialias: false, preserveDrawingBuffer: true });
       const e = n || [];
       n || e.push(new Nt()), this._renderProgram = new Ct(this, e);
       const A = [this._renderProgram];
