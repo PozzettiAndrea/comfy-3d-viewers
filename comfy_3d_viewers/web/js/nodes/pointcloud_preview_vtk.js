@@ -1,6 +1,6 @@
 /**
  * VTK.js Point Cloud Preview Widget
- * For SAM3DObjects and other point cloud visualization nodes
+ * For point cloud visualization nodes (SAM3, DepthAnythingV3, etc.)
  */
 
 import { app } from "../../../scripts/app.js";
@@ -8,11 +8,13 @@ import { EXTENSION_FOLDER, getViewerUrl } from "./utils/extensionFolder.js";
 import { createContainer, createIframe, createInfoPanel, createWidgetOptions } from "./utils/uiComponents.js";
 import { createViewerManager, createErrorHandler, buildViewUrl } from "./utils/postMessage.js";
 
+const POINTCLOUD_NODES = ["SAM3D_PreviewPointCloud", "DA3_PreviewPointCloud"];
+
 app.registerExtension({
     name: "comfy3d.pointcloud.vtk",
 
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
-        if (nodeData.name === "SAM3D_PreviewPointCloud") {
+        if (POINTCLOUD_NODES.includes(nodeData.name)) {
 
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function() {
