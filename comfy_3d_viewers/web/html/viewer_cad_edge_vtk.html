@@ -219,7 +219,7 @@
     </div>
 
     <!-- Load VTK.js from existing bundle in CADabra -->
-    <script src="../js/vtk-gltf.js"></script>
+    <script src="js/vtk-gltf.js"></script>
 
     <script type="module">
         // Use the existing VTK.js bundle loaded globally
@@ -335,7 +335,7 @@
                 }
 
                 const script = document.createElement('script');
-                script.src = '../three/three.min.js';
+                script.src = 'three/three.min.js';
                 script.onload = () => resolve(window.THREE);
                 script.onerror = () => reject(new Error('Failed to load Three.js'));
                 document.head.appendChild(script);
