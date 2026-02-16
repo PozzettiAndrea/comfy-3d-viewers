@@ -57,6 +57,18 @@ const TEXT_REPORT_NODES = [
     // IO
     "GeomPackLoadMeshFBX",
     "GeomPackLoadMeshBlend",
+    // CADabra
+    "CADEdgeAnalysis",
+    "CAD_Quality_Metrics",
+    "CADCurvature",
+    "CADSewFaces",
+    "CADCheckOverlappingFaces",
+    "CADSplitComponents",
+    "CADHealShape",
+    "CADFixDegenerateFaces",
+    "CADEdgeViewerVTK",
+    "CADPrimitiveReconstruction",
+    "CADFaceAnalysis",
 ];
 
 const TOGGLE_HEIGHT = 28;
