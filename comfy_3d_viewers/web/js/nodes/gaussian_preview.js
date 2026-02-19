@@ -204,43 +204,26 @@ app.registerExtension({
                         // ComfyUI serves output files via /view API endpoint
                         const filepath = `/view?filename=${encodeURIComponent(filename)}&type=output&subfolder=`;
 
-                        // Function to fetch and send data to iframe
-                        const fetchAndSend = async () => {
+                        // Send URL to iframe — gsplat.js fetches directly with streaming
+                        const sendUrl = () => {
                             if (!iframe.contentWindow) {
                                 console.error("[GeomPack Gaussian] Iframe contentWindow not available");
                                 return;
                             }
-
-                            try {
-                                // Fetch the PLY file from parent context (authenticated)
-                                console.log("[GeomPack Gaussian] Fetching PLY file:", filepath);
-                                const response = await fetch(filepath);
-                                if (!response.ok) {
-                                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                                }
-                                const arrayBuffer = await response.arrayBuffer();
-                                console.log("[GeomPack Gaussian] Fetched PLY file, size:", arrayBuffer.byteLength);
-
-                                // Send the data to iframe with camera parameters
-                                iframe.contentWindow.postMessage({
-                                    type: "LOAD_MESH_DATA",
-                                    data: arrayBuffer,
-                                    filename: filename,
-                                    extrinsics: extrinsics,
-                                    intrinsics: intrinsics,
-                                    timestamp: Date.now()
-                                }, "*", [arrayBuffer]);
-                            } catch (error) {
-                                console.error("[GeomPack Gaussian] Error fetching PLY:", error);
-                                infoPanel.innerHTML = `<div style="color: #ff6b6b;">Error loading PLY: ${error.message}</div>`;
-                            }
+                            iframe.contentWindow.postMessage({
+                                type: "LOAD_MESH_URL",
+                                url: filepath,
+                                filename: filename,
+                                extrinsics: extrinsics,
+                                intrinsics: intrinsics,
+                                timestamp: Date.now()
+                            }, "*");
                         };
 
-                        // Fetch and send when iframe is ready
                         if (iframeLoaded) {
-                            fetchAndSend();
+                            sendUrl();
                         } else {
-                            setTimeout(fetchAndSend, 500);
+                            setTimeout(sendUrl, 500);
                         }
                     }
                 };

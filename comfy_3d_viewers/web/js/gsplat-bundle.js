@@ -953,7 +953,7 @@ format binary_little_endian 1.0
   async function rt(E, t) {
     const n = await fetch(E, {
       mode: "cors",
-      credentials: "omit",
+      credentials: "same-origin",
       cache: t ? "force-cache" : "default"
     });
     if (n.status != 200)
