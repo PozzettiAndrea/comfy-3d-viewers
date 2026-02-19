@@ -566,6 +566,101 @@
             }
         }
 
+        async function loadPLYFromURL(url, filename, extrinsics, intrinsics) {
+            try {
+                // Reset lock state
+                isResolutionLocked = false;
+
+                // Clear ALL existing objects from scene
+                if (scene.objects && scene.objects.length > 0) {
+                    console.log('[GaussianViewer] Clearing', scene.objects.length, 'existing objects from scene');
+                    while (scene.objects.length > 0) {
+                        scene.removeObject(scene.objects[0]);
+                    }
+                }
+                currentSplat = null;
+
+                // Pre-calculate scale compensation from intrinsics BEFORE loading
+                gaussianScaleCompensation = 1.0;
+                if (intrinsics && Array.isArray(intrinsics) && intrinsics.length >= 2) {
+                    const cx = intrinsics[0][2];
+                    const imageWidth = cx * 2;
+                    const containerWidth = canvas.clientWidth || 512;
+                    let ratio = imageWidth / containerWidth;
+                    const DENSITY_BOOST = 10.0;
+                    gaussianScaleCompensation = ratio * DENSITY_BOOST;
+                    console.log('[GaussianViewer] Pre-calculated scale compensation:', gaussianScaleCompensation.toFixed(2), 'x');
+                }
+
+                console.log('[GaussianViewer] Loading from URL:', url);
+
+                // Load PLY directly from URL — gsplat.js streams it
+                await SPLAT.PLYLoader.LoadAsync(url, scene);
+
+                // Get the loaded splat (last object in scene)
+                if (scene.objects && scene.objects.length > 0) {
+                    currentSplat = scene.objects[scene.objects.length - 1];
+
+                    if (currentSplat.bounds) {
+                        const center = currentSplat.bounds.center();
+                        const size = currentSplat.bounds.size();
+                        console.log('[GaussianViewer] Scene bounds center:', center.x, center.y, center.z);
+                        console.log('[GaussianViewer] Scene bounds size:', size.x, size.y, size.z);
+                    }
+
+                    // Store original scales and apply compensation
+                    if (currentSplat.data && currentSplat.data.scales) {
+                        const scales = currentSplat.data.scales;
+                        const numGaussians = scales.length / 3;
+
+                        originalScales = new Float32Array(scales.length);
+                        for (let i = 0; i < scales.length; i++) {
+                            originalScales[i] = scales[i] * gaussianScaleCompensation;
+                        }
+
+                        for (let i = 0; i < scales.length; i++) {
+                            scales[i] = originalScales[i];
+                        }
+                        currentSplat.data.changed = true;
+
+                        console.log('[GaussianViewer] Applied scale compensation:', gaussianScaleCompensation.toFixed(2), 'x,', numGaussians, 'gaussians');
+                    } else {
+                        originalScales = null;
+                    }
+
+                    scaleInput.value = 1.0;
+                    currentScale = 1.0;
+                }
+
+                // Set camera from extrinsics and intrinsics if provided
+                if (extrinsics || intrinsics) {
+                    setCameraFromExtrinsics(extrinsics, intrinsics, currentSplat);
+                    if (controls) controls.update();
+                }
+
+                infoPanel.classList.remove('hidden');
+                infoContent.innerHTML = `<span style="color:#6cc;">Gaussian Splat Loaded</span><br><span style="color:#888;">${filename}</span>`;
+
+                window.parent.postMessage({
+                    type: 'MESH_LOADED',
+                    error: null,
+                    timestamp: Date.now()
+                }, '*');
+
+                console.log('[GaussianViewer] Loaded successfully from URL');
+
+            } catch (err) {
+                console.error('[GaussianViewer] Load error:', err);
+                showError('Failed to load PLY: ' + err.message);
+
+                window.parent.postMessage({
+                    type: 'MESH_ERROR',
+                    error: err.message,
+                    timestamp: Date.now()
+                }, '*');
+            }
+        }
+
         // Reset camera to initial position
         function resetCamera() {
             if (camera && controls) {
@@ -843,12 +938,13 @@
 
         // Listen for messages from parent
         window.addEventListener('message', (event) => {
-            const { type, data, filename, extrinsics, intrinsics } = event.data;
+            const { type, data, url, filename, extrinsics, intrinsics } = event.data;
 
-            if (type === 'LOAD_MESH_DATA' && data) {
+            if (type === 'LOAD_MESH_URL' && url) {
+                console.log('[GaussianViewer] Received LOAD_MESH_URL:', url);
+                loadPLYFromURL(url, filename || 'gaussian.ply', extrinsics, intrinsics);
+            } else if (type === 'LOAD_MESH_DATA' && data) {
                 console.log('[GaussianViewer] Received LOAD_MESH_DATA, size:', data.byteLength);
-                console.log('[GaussianViewer] Extrinsics:', extrinsics);
-                console.log('[GaussianViewer] Intrinsics:', intrinsics);
                 loadPLYFromData(data, filename || 'gaussian.ply', extrinsics, intrinsics);
             }
         });
