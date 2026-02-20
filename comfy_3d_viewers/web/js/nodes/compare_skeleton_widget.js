@@ -21,7 +21,7 @@ app.registerExtension({
     name: "unirig.compareskeletons",
 
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
-        if (nodeData.name === "CompareSkeletons") {
+        if (nodeData.name === "CompareSkeletons" || nodeData.name === "UniRigCompareSkeletons") {
             console.log("[UniRig Compare] Registering Compare Skeletons node");
 
             const onNodeCreated = nodeType.prototype.onNodeCreated;
