@@ -201,8 +201,18 @@ app.registerExtension({
                             </div>
                         `;
 
-                        // ComfyUI serves output files via /view API endpoint
-                        const filepath = `/view?filename=${encodeURIComponent(filename)}&type=output&subfolder=`;
+                        // ComfyUI serves files via /view API — parse type/subfolder/filename
+                        let filepath;
+                        const pathMatch = filename.replace(/\\/g, '/').match(/^(output|input|temp)\/(.+)$/);
+                        if (pathMatch) {
+                            const [, type, relPath] = pathMatch;
+                            const parts = relPath.split('/');
+                            const fname = parts.pop();
+                            const subfolder = parts.join('/');
+                            filepath = `/view?filename=${encodeURIComponent(fname)}&type=${type}&subfolder=${encodeURIComponent(subfolder)}`;
+                        } else {
+                            filepath = `/view?filename=${encodeURIComponent(filename)}&type=output&subfolder=`;
+                        }
 
                         // Send URL to iframe — gsplat.js fetches directly with streaming
                         const sendUrl = () => {
