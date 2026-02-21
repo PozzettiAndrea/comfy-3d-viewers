@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "comfy-3d-viewers"
-version = "0.2.31"
+version = "0.2.32"
 description = "Reusable 3D viewer infrastructure for ComfyUI nodes"
 readme = "README.md"
 license = "GPL-3.0-or-later"
