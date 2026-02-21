@@ -51,6 +51,20 @@
 
         const camLabel = document.getElementById('cam-label');
 
+        function buildProjectionMatrix(fx, fy, cx, cy, w, h, near, far) {
+            // OpenGL projection matrix from OpenCV pinhole intrinsics.
+            // X: NDC_x = 2*u/w - 1  (no flip)  → [0,2] = -(2*cx/w - 1)
+            // Y: NDC_y = 1 - 2*v/h  (Y flipped) → [1,2] = +(2*cy/h - 1)
+            const m = new THREE.Matrix4();
+            m.set(
+                2*fx/w,  0,        -(2*cx/w - 1),                    0,
+                0,       2*fy/h,    (2*cy/h - 1),                    0,
+                0,       0,        -(far+near)/(far-near),  -2*far*near/(far-near),
+                0,       0,        -1,                               0
+            );
+            return m;
+        }
+
         function init() {
             const container = document.getElementById('canvas-container');
             const w = container.clientWidth;
@@ -320,6 +334,8 @@
             }
         }
 
+        let _dbgLastFrame = -1;  // throttle debug logs
+
         function setCameraFromFrame(frame) {
             if (!meshData || !meshData.hasCamera) return;
 
@@ -336,21 +352,85 @@
             const near = 0.01;
             const far = 100.0;
 
+            // --- DEBUG: log once per new frame (not every render tick) ---
+            const doLog = (f !== _dbgLastFrame);
+            if (doLog) _dbgLastFrame = f;
+
+            if (doLog && f === 0) {
+                console.log(`%c[SMPC DEBUG] ===== Frame 0 diagnostic =====`, 'color:#0ff');
+                console.log(`  K: fx=${fx.toFixed(1)} fy=${fy.toFixed(1)} cx=${cx.toFixed(1)} cy=${cy.toFixed(1)}`);
+                console.log(`  Image: ${w}x${h}  cx-w/2=${(cx-w/2).toFixed(1)}  cy-h/2=${(cy-h/2).toFixed(1)}`);
+                console.log(`  Vertical half-FOV: ${(Math.atan(h/(2*fy))*180/Math.PI).toFixed(1)}°`);
+                console.log(`  Horizontal half-FOV: ${(Math.atan(w/(2*fx))*180/Math.PI).toFixed(1)}°`);
+            }
+
+            // Read camera extrinsics (needed by both modes for debug)
+            const ri = f * 9;
+            const ti = f * 3;
+            const R00 = meshData.R_cam2world[ri+0], R01 = meshData.R_cam2world[ri+1], R02 = meshData.R_cam2world[ri+2];
+            const R10 = meshData.R_cam2world[ri+3], R11 = meshData.R_cam2world[ri+4], R12 = meshData.R_cam2world[ri+5];
+            const R20 = meshData.R_cam2world[ri+6], R21 = meshData.R_cam2world[ri+7], R22 = meshData.R_cam2world[ri+8];
+            const camTx = meshData.t_cam2world[ti+0], camTy = meshData.t_cam2world[ti+1], camTz = meshData.t_cam2world[ti+2];
+
+            if (doLog && f === 0) {
+                console.log(`  Camera pos (world): [${camTx.toFixed(3)}, ${camTy.toFixed(3)}, ${camTz.toFixed(3)}]`);
+                // Optical axis = R_cam2world column 2 (OpenCV Z-forward in world)
+                console.log(`  Optical axis (world): [${R02.toFixed(4)}, ${R12.toFixed(4)}, ${R22.toFixed(4)}]`);
+                const tiltDeg = Math.atan2(-R12, Math.sqrt(R02*R02 + R22*R22)) * 180 / Math.PI;
+                console.log(`  Camera downward tilt: ${tiltDeg.toFixed(1)}°`);
+
+                // Compute mesh centroid from world vertices frame 0
+                const nv = meshData.numVerts;
+                let mx=0, my=0, mz=0;
+                for (let i=0; i<nv; i++) {
+                    mx += meshData.vertices[i*3+0];
+                    my += meshData.vertices[i*3+1];
+                    mz += meshData.vertices[i*3+2];
+                }
+                mx/=nv; my/=nv; mz/=nv;
+                console.log(`  Mesh centroid (world): [${mx.toFixed(3)}, ${my.toFixed(3)}, ${mz.toFixed(3)}]`);
+
+                // Direction from camera to mesh centroid
+                const dx = mx-camTx, dy = my-camTy, dz = mz-camTz;
+                const dlen = Math.sqrt(dx*dx+dy*dy+dz*dz);
+                console.log(`  Dir cam->mesh (world): [${(dx/dlen).toFixed(4)}, ${(dy/dlen).toFixed(4)}, ${(dz/dlen).toFixed(4)}]`);
+                const neededTilt = Math.atan2(-(dy/dlen), Math.sqrt((dx/dlen)**2+(dz/dlen)**2)) * 180/Math.PI;
+                console.log(`  Needed downward tilt to center mesh: ${neededTilt.toFixed(1)}°`);
+
+                // Project mesh centroid into camera to get pixel position
+                // P_cam = R_cam2world^T @ (P_world - t_cam2world)
+                const pcx = R00*dx + R10*dy + R20*dz;
+                const pcy = R01*dx + R11*dy + R21*dz;
+                const pcz = R02*dx + R12*dy + R22*dz;
+                const pu = fx * pcx / pcz + cx;
+                const pv = fy * pcy / pcz + cy;
+                console.log(`  Mesh centroid in cam frame: [${pcx.toFixed(3)}, ${pcy.toFixed(3)}, ${pcz.toFixed(3)}]`);
+                console.log(`  Mesh centroid pixel: (${pu.toFixed(0)}, ${pv.toFixed(0)})  image center: (${w/2}, ${h/2})`);
+                console.log(`  Offset from center: (${(pu-w/2).toFixed(0)}, ${(pv-h/2).toFixed(0)}) pixels`);
+
+                // Incam vertices centroid
+                if (meshData.incamVertices) {
+                    let ix=0, iy=0, iz=0;
+                    for (let i=0; i<nv; i++) {
+                        ix += meshData.incamVertices[i*3+0];
+                        iy += meshData.incamVertices[i*3+1];
+                        iz += meshData.incamVertices[i*3+2];
+                    }
+                    ix/=nv; iy/=nv; iz/=nv;
+                    console.log(`  Incam centroid (cam frame): [${ix.toFixed(3)}, ${iy.toFixed(3)}, ${iz.toFixed(3)}]`);
+                    const ipu = fx * ix / iz + cx;
+                    const ipv = fy * iy / iz + cy;
+                    console.log(`  Incam centroid pixel: (${ipu.toFixed(0)}, ${ipv.toFixed(0)})`);
+                }
+                console.log(`%c[SMPC DEBUG] ===== end =====`, 'color:#0ff');
+            }
+
             if (cameraMode === 'through_camera') {
-                // OpenGL projection matrix from pinhole intrinsics
-                const projMatrix = new THREE.Matrix4();
-                projMatrix.set(
-                    2*fx/w,  0,        -(2*cx/w - 1),   0,
-                    0,       2*fy/h,   -(2*cy/h - 1),   0,
-                    0,       0,        -(far+near)/(far-near),  -2*far*near/(far-near),
-                    0,       0,        -1,               0
-                );
+                const projMatrix = buildProjectionMatrix(fx, fy, cx, cy, w, h, near, far);
                 trajectoryCamera.projectionMatrix.copy(projMatrix);
                 trajectoryCamera.projectionMatrixInverse.copy(projMatrix).invert();
 
                 if (meshData.incamVertices) {
-                    // Use incam vertices directly -- camera at origin with OpenCV->Three.js flip
-                    // Incam vertices are already in camera space (computed with global_orient_incam/transl_incam)
                     trajectoryCamera.matrixWorld.set(
                         1,  0,  0, 0,
                         0, -1,  0, 0,
@@ -359,33 +439,25 @@
                     );
                     trajectoryCamera.matrixWorldInverse.copy(trajectoryCamera.matrixWorld).invert();
                 } else {
-                    // Fallback: use R_cam2world with OpenCV->Three.js column flip
-                    const ri = f * 9;
-                    const ti = f * 3;
-                    const R00 = meshData.R_cam2world[ri+0], R01 = meshData.R_cam2world[ri+1], R02 = meshData.R_cam2world[ri+2];
-                    const R10 = meshData.R_cam2world[ri+3], R11 = meshData.R_cam2world[ri+4], R12 = meshData.R_cam2world[ri+5];
-                    const R20 = meshData.R_cam2world[ri+6], R21 = meshData.R_cam2world[ri+7], R22 = meshData.R_cam2world[ri+8];
-                    const tx = meshData.t_cam2world[ti+0], ty = meshData.t_cam2world[ti+1], tz = meshData.t_cam2world[ti+2];
                     trajectoryCamera.matrixWorld.set(
-                        R00, -R01, -R02, tx,
-                        R10, -R11, -R12, ty,
-                        R20, -R21, -R22, tz,
+                        R00, -R01, -R02, camTx,
+                        R10, -R11, -R12, camTy,
+                        R20, -R21, -R22, camTz,
                         0,    0,    0,   1
                     );
                     trajectoryCamera.matrixWorldInverse.copy(trajectoryCamera.matrixWorld).invert();
                 }
             } else {
-                // Exterior mode: position the camera frustum using R_cam2world
-                const ri = f * 9;
-                const ti = f * 3;
-                const R00 = meshData.R_cam2world[ri+0], R01 = meshData.R_cam2world[ri+1], R02 = meshData.R_cam2world[ri+2];
-                const R10 = meshData.R_cam2world[ri+3], R11 = meshData.R_cam2world[ri+4], R12 = meshData.R_cam2world[ri+5];
-                const R20 = meshData.R_cam2world[ri+6], R21 = meshData.R_cam2world[ri+7], R22 = meshData.R_cam2world[ri+8];
-                const tx = meshData.t_cam2world[ti+0], ty = meshData.t_cam2world[ti+1], tz = meshData.t_cam2world[ti+2];
+                // Exterior mode: set frustum projection with short near/far for visualization
+                const visNear = 0.1, visFar = 3.0;
+                const projMatrix = buildProjectionMatrix(fx, fy, cx, cy, w, h, visNear, visFar);
+                trajectoryCamera.projectionMatrix.copy(projMatrix);
+                trajectoryCamera.projectionMatrixInverse.copy(projMatrix).invert();
+
                 trajectoryCamera.matrixWorld.set(
-                    R00, -R01, -R02, tx,
-                    R10, -R11, -R12, ty,
-                    R20, -R21, -R22, tz,
+                    R00, -R01, -R02, camTx,
+                    R10, -R11, -R12, camTy,
+                    R20, -R21, -R22, camTz,
                     0,    0,    0,   1
                 );
                 trajectoryCamera.matrixWorldInverse.copy(trajectoryCamera.matrixWorld).invert();
