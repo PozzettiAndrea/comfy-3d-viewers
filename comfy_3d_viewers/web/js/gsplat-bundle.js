@@ -2082,7 +2082,7 @@ void main () {
       };
       t.addEventListener("objectChanged", u), this.setCameraTarget = (l) => {
         const J = l.x - t.position.x, D = l.y - t.position.y, b = l.z - t.position.z;
-        a = Math.sqrt(J * J + D * D + b * b), d = Math.atan2(D, Math.sqrt(J * J + b * b)), I = -Math.atan2(J, b), Q = new R(l.x, l.y, l.z);
+        a = Math.sqrt(J * J + D * D + b * b), d = Math.atan2(D, Math.sqrt(J * J + b * b)), I = -Math.atan2(J, b), Q = new R(l.x, l.y, l.z), i = I, e = d, A = a, r = Q.clone();
       };
       const S = () => 0.1 + 0.9 * (a - this.minZoom) / (this.maxZoom - this.minZoom), W = (l) => {
         c[l.code] = true, l.code === "ArrowUp" && (c.KeyW = true), l.code === "ArrowDown" && (c.KeyS = true), l.code === "ArrowLeft" && (c.KeyA = true), l.code === "ArrowRight" && (c.KeyD = true);
