@@ -65,14 +65,27 @@ export function createLoadDualMeshMessage(options) {
 }
 
 /**
- * Build ComfyUI view API URL for a file
- * @param {string} filename - The filename
- * @param {string} type - File type (default: "output")
- * @param {string} subfolder - Subfolder path (default: "")
+ * Build ComfyUI view API URL for a file.
+ * Handles absolute paths (/home/.../output/sub/file.glb),
+ * relative paths (output/sub/file.glb), and bare filenames (file.glb).
+ * @param {string} filename - The filename or path
+ * @param {string} defaultType - Default file type (default: "output")
+ * @param {string} defaultSubfolder - Default subfolder path (default: "")
  * @returns {string} API URL
  */
-export function buildViewUrl(filename, type = "output", subfolder = "") {
-    return `/view?filename=${encodeURIComponent(filename)}&type=${type}&subfolder=${subfolder}`;
+export function buildViewUrl(filename, defaultType = "output", defaultSubfolder = "") {
+    const normalized = filename.replace(/\\/g, '/');
+    const pathMatch = normalized.match(/(?:^|\/)(output|input|temp)\/(.+)$/);
+    if (pathMatch) {
+        const [, type, relPath] = pathMatch;
+        const parts = relPath.split('/');
+        const fname = parts.pop();
+        const subfolder = parts.join('/');
+        return `/view?filename=${encodeURIComponent(fname)}&type=${type}&subfolder=${encodeURIComponent(subfolder)}`;
+    }
+    // Bare filename fallback
+    const basename = normalized.split('/').pop();
+    return `/view?filename=${encodeURIComponent(basename)}&type=${defaultType}&subfolder=${defaultSubfolder}`;
 }
 
 /**

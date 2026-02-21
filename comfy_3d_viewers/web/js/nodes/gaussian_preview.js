@@ -202,8 +202,10 @@ app.registerExtension({
                         `;
 
                         // ComfyUI serves files via /view API — parse type/subfolder/filename
+                        // Handles both absolute (/home/.../output/sub/file) and relative (output/sub/file) paths
                         let filepath;
-                        const pathMatch = filename.replace(/\\/g, '/').match(/^(output|input|temp)\/(.+)$/);
+                        const normalized = filename.replace(/\\/g, '/');
+                        const pathMatch = normalized.match(/(?:^|\/)(output|input|temp)\/(.+)$/);
                         if (pathMatch) {
                             const [, type, relPath] = pathMatch;
                             const parts = relPath.split('/');
@@ -211,7 +213,9 @@ app.registerExtension({
                             const subfolder = parts.join('/');
                             filepath = `/view?filename=${encodeURIComponent(fname)}&type=${type}&subfolder=${encodeURIComponent(subfolder)}`;
                         } else {
-                            filepath = `/view?filename=${encodeURIComponent(filename)}&type=output&subfolder=`;
+                            // Fallback: use just the basename
+                            const basename = normalized.split('/').pop();
+                            filepath = `/view?filename=${encodeURIComponent(basename)}&type=output&subfolder=`;
                         }
 
                         // Send URL to iframe — gsplat.js fetches directly with streaming
