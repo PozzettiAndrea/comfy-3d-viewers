@@ -14,6 +14,9 @@ function createViewerWidget(node, nodeType) {
     nodeType.prototype.onNodeCreated = function () {
         const result = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
 
+        // Viewer state persisted via DOM widget serialization
+        const viewerState = { camera_state: "", selected_face_id: null };
+
         // Create container for viewer
         const container = document.createElement("div");
         container.style.width = "100%";
@@ -244,10 +247,10 @@ function createViewerWidget(node, nodeType) {
             container,
             {
                 getValue() {
-                    return "";
+                    return JSON.stringify(viewerState);
                 },
                 setValue(v) {
-                    // Not used for output nodes
+                    try { Object.assign(viewerState, JSON.parse(v)); } catch(e) {}
                 }
             }
         );
@@ -355,6 +358,8 @@ function createViewerWidget(node, nodeType) {
                         linearDeflection: linearDeflection,
                         visualizationMode: visualizationMode,
                         nodeId: this.id,
+                        cameraState: viewerState.camera_state,
+                        selectedFaceId: viewerState.selected_face_id,
                         timestamp: Date.now()
                     }, "*");
                 }
@@ -428,6 +433,10 @@ function createViewerWidget(node, nodeType) {
                         type: "DESELECT_FACE"
                     }, "*");
                 }
+            } else if (event.data.type === "WIDGET_UPDATE" && event.data.nodeId === this.id) {
+                // Sync viewer state from iframe (camera position, face selection)
+                const { name, value } = event.data;
+                if (name in viewerState) viewerState[name] = value;
             }
         });
 

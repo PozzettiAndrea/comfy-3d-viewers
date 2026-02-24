@@ -359,6 +359,22 @@
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
 
+            // Persist camera state back to parent widget on change
+            controls.addEventListener('change', () => {
+                if (!nodeId) return;
+                const cameraState = JSON.stringify({
+                    position: [camera.position.x, camera.position.y, camera.position.z],
+                    target: [controls.target.x, controls.target.y, controls.target.z],
+                    up: [camera.up.x, camera.up.y, camera.up.z]
+                });
+                window.parent.postMessage({
+                    type: 'WIDGET_UPDATE',
+                    nodeId: nodeId,
+                    name: 'camera_state',
+                    value: cameraState
+                }, '*');
+            });
+
             // Handle window resize
             window.addEventListener('resize', onWindowResize, false);
 
@@ -449,6 +465,14 @@
                     faceData: faceData
                 }, '*');
 
+                // Persist selected face to widget state
+                window.parent.postMessage({
+                    type: 'WIDGET_UPDATE',
+                    nodeId: nodeId,
+                    name: 'selected_face_id',
+                    value: faceId
+                }, '*');
+
                 console.log('[CADabra Analysis] Face data:', faceData);
             }
         }
@@ -503,6 +527,14 @@
                 nodeId: nodeId,
                 faceId: null,
                 faceData: null
+            }, '*');
+
+            // Persist deselection to widget state
+            window.parent.postMessage({
+                type: 'WIDGET_UPDATE',
+                nodeId: nodeId,
+                name: 'selected_face_id',
+                value: null
             }, '*');
 
             console.log('[CADabra Analysis] Face selection cleared');
@@ -899,6 +931,10 @@
         let analysisData = null;
         let nodeId = null;
 
+        // Pending state to restore after mesh load
+        let pendingCameraState = null;
+        let pendingSelectedFaceId = null;
+
         // Caching to prevent redundant loading
         let loadedMeshUrl = null;
         let loadedAnalysisUrl = null;
@@ -1119,8 +1155,30 @@
                 // Create B-rep edges from analysis data (free edges in red, shared in black)
                 createBRepEdges(analysisData.edges);
 
-                // Fit camera to model
+                // Fit camera to model (default), then restore saved state if available
                 fitCameraToModel();
+
+                // Restore camera position from saved state
+                if (pendingCameraState) {
+                    try {
+                        const cs = JSON.parse(pendingCameraState);
+                        camera.position.set(cs.position[0], cs.position[1], cs.position[2]);
+                        controls.target.set(cs.target[0], cs.target[1], cs.target[2]);
+                        if (cs.up) camera.up.set(cs.up[0], cs.up[1], cs.up[2]);
+                        controls.update();
+                        console.log('[CADabra Analysis] Camera state restored');
+                    } catch(e) {
+                        console.warn('[CADabra Analysis] Failed to restore camera state:', e);
+                    }
+                    pendingCameraState = null;
+                }
+
+                // Restore face selection from saved state
+                if (pendingSelectedFaceId != null && analysisData?.faces) {
+                    selectFace(pendingSelectedFaceId);
+                    console.log('[CADabra Analysis] Face selection restored:', pendingSelectedFaceId);
+                    pendingSelectedFaceId = null;
+                }
 
                 // Cache the loaded URLs to prevent redundant reloads
                 loadedMeshUrl = meshUrl;
@@ -1346,7 +1404,11 @@
             if (event.data.type === 'LOAD_CAD_ANALYSIS') {
                 // Support both old (stepUrl) and new (meshUrl) formats
                 const meshUrl = event.data.meshUrl || event.data.stepUrl;
-                const { analysisUrl, linearDeflection, nodeId: receivedNodeId, visualizationMode } = event.data;
+                const { analysisUrl, linearDeflection, nodeId: receivedNodeId, visualizationMode, cameraState: savedCameraState, selectedFaceId: savedFaceId } = event.data;
+
+                // Store pending state to restore after load
+                pendingCameraState = savedCameraState || null;
+                pendingSelectedFaceId = savedFaceId != null ? savedFaceId : null;
 
                 // Update visualization mode if provided
                 if (visualizationMode) {
