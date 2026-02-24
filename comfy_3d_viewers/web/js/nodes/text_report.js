@@ -68,6 +68,11 @@ const TEXT_REPORT_NODES = [
     "CADFixDegenerateFaces",
     "CADPrimitiveReconstruction",
     "CADFaceAnalysis",
+    // MeshSegmenter
+    "MeshSegGenerateMasks",
+    "MeshSegLift2DTo3DLabels",
+    "MeshSegSmoothLabels",
+    "MeshSegApplyLabelsToMesh",
 ];
 
 const TOGGLE_HEIGHT = 28;

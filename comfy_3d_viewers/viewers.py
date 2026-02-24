@@ -121,6 +121,7 @@ VIEWER_FILES = {
     # --- Node info widgets (no HTML viewer) ---
     "text_report": {
         "widget": ("text_report.js", "js/"),
+        "utils": True,
     },
 
     # --- CAD viewers ---
