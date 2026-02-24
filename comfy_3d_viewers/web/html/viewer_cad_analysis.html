@@ -164,58 +164,6 @@
             background: #45a049;
         }
         /* Face info panel */
-        #faceInfoPanel {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            background: rgba(0, 0, 0, 0.8);
-            border: 1px solid #444;
-            border-radius: 4px;
-            padding: 10px;
-            font-size: 11px;
-            color: #ccc;
-            max-width: 280px;
-            display: none;
-            z-index: 100;
-        }
-        #faceInfoPanel.visible {
-            display: block;
-        }
-        #faceInfoPanel h4 {
-            margin: 0 0 8px 0;
-            color: #4a9eff;
-            font-size: 12px;
-        }
-        #faceInfoPanel .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 4px;
-        }
-        #faceInfoPanel .info-label {
-            color: #888;
-        }
-        #faceInfoPanel .info-value {
-            color: #fff;
-            font-family: monospace;
-        }
-        #faceInfoPanel .neighbors-list {
-            margin-top: 8px;
-            padding-top: 8px;
-            border-top: 1px solid #333;
-        }
-        #faceInfoPanel .neighbors-list span {
-            display: inline-block;
-            background: #ffc107;
-            color: #000;
-            padding: 1px 4px;
-            border-radius: 2px;
-            margin: 2px;
-            font-size: 10px;
-            cursor: pointer;
-        }
-        #faceInfoPanel .neighbors-list span:hover {
-            background: #ffca2c;
-        }
     </style>
 </head>
 <body>
@@ -265,30 +213,6 @@
             </div>
         </div>
 
-        <!-- Face info panel (shown when a face is selected) -->
-        <div id="faceInfoPanel">
-            <h4>Face <span id="faceIdDisplay">-</span></h4>
-            <div class="info-row">
-                <span class="info-label">Type:</span>
-                <span class="info-value" id="faceTypeDisplay">-</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Area:</span>
-                <span class="info-value" id="faceAreaDisplay">-</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Curvature:</span>
-                <span class="info-value" id="faceCurvatureDisplay">-</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Edges:</span>
-                <span class="info-value" id="faceEdgeCountDisplay">-</span>
-            </div>
-            <div class="neighbors-list" id="neighborsSection">
-                <span class="info-label">Neighbors:</span>
-                <div id="neighborsList"></div>
-            </div>
-        </div>
     </div>
 
     <!-- Load Three.js for rendering (bundled locally - r138) -->
@@ -321,7 +245,6 @@
 
         const loadingDiv = document.getElementById('loading');
         const errorDiv = document.getElementById('error');
-        const faceInfoPanel = document.getElementById('faceInfoPanel');
 
         // Initialize Three.js scene
         function initScene() {
@@ -454,9 +377,6 @@
                     createNeighborHighlights(faceData.adjacent_faces);
                 }
 
-                // Update face info panel
-                updateFaceInfoPanel(faceData);
-
                 // Send face data to parent window
                 window.parent.postMessage({
                     type: 'FACE_SELECTED',
@@ -477,32 +397,6 @@
             }
         }
 
-        // Update the face info panel
-        function updateFaceInfoPanel(faceData) {
-            document.getElementById('faceIdDisplay').textContent = faceData.face_id;
-            document.getElementById('faceTypeDisplay').textContent = faceData.surface_type || '-';
-            document.getElementById('faceAreaDisplay').textContent = faceData.area ? faceData.area.toFixed(4) : '-';
-            document.getElementById('faceCurvatureDisplay').textContent = faceData.curvature_type || '-';
-            document.getElementById('faceEdgeCountDisplay').textContent = faceData.edge_count !== undefined ? faceData.edge_count : '-';
-
-            // Show neighbors only in connectivity_inspection mode
-            const neighborsList = document.getElementById('neighborsList');
-            neighborsList.innerHTML = '';
-            if (currentVisualizationMode === 'connectivity_inspection' && faceData.adjacent_faces && faceData.adjacent_faces.length > 0) {
-                faceData.adjacent_faces.forEach(neighborId => {
-                    const span = document.createElement('span');
-                    span.textContent = neighborId;
-                    span.addEventListener('click', () => selectFace(neighborId));
-                    neighborsList.appendChild(span);
-                });
-                document.getElementById('neighborsSection').style.display = 'block';
-            } else {
-                document.getElementById('neighborsSection').style.display = 'none';
-            }
-
-            faceInfoPanel.classList.add('visible');
-        }
-
         // Clear face selection
         function clearFaceSelection() {
             selectedFaceId = null;
@@ -517,9 +411,6 @@
 
             // Remove neighbor highlights
             clearNeighborHighlights();
-
-            // Hide face info panel
-            faceInfoPanel.classList.remove('visible');
 
             // Notify parent
             window.parent.postMessage({

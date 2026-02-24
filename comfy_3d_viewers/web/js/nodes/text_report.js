@@ -66,7 +66,6 @@ const TEXT_REPORT_NODES = [
     "CADSplitComponents",
     "CADHealShape",
     "CADFixDegenerateFaces",
-    "CADEdgeViewerVTK",
     "CADPrimitiveReconstruction",
     "CADFaceAnalysis",
 ];
