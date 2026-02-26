@@ -124,6 +124,15 @@ VIEWER_FILES = {
         "utils": True,
     },
 
+    # --- PyVista viewer ---
+    "pyvista": {
+        "html": ("viewer_pyvista.html", ""),
+        "bundles": [("vtk-gltf.js", "js/"), ("viewer-bundle-vtk.js", "js/")],
+        "widget": ("pyvista_preview.js", "js/"),
+        "utils": True,
+        "viewer_modules": True,
+    },
+
     # --- CAD viewers ---
     "cad_analysis": {
         "html": ("viewer_cad_analysis.html", ""),

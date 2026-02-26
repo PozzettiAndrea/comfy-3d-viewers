@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>PyVista Viewer</title>
+    <style>
+        /* PyVista/trame-inspired styling */
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #4d4d4d;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        #viewerContainer {
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+
+        #container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* Loading overlay */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #e0e0e0;
+            font-size: 13px;
+            text-align: center;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .spinner {
+            width: 28px;
+            height: 28px;
+            border: 3px solid rgba(255,255,255,0.15);
+            border-top: 3px solid #8eb8d4;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Controls bar — PyVista/paraview style */
+        #controls {
+            background: #3b3b3b;
+            border-top: 1px solid #555;
+            padding: 5px 10px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            font-size: 11px;
+            color: #ddd;
+        }
+
+        #controls label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        }
+
+        #controls select,
+        #controls button {
+            background: #505050;
+            color: #e0e0e0;
+            border: 1px solid #666;
+            padding: 3px 7px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-family: inherit;
+        }
+
+        #controls button {
+            cursor: pointer;
+        }
+
+        #controls button:hover {
+            background: #606060;
+        }
+
+        #controls input[type="checkbox"] {
+            cursor: pointer;
+            accent-color: #8eb8d4;
+        }
+
+        .control-separator {
+            width: 1px;
+            height: 18px;
+            background: #555;
+        }
+
+        .view-button {
+            min-width: 26px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        /* Settings panel */
+        .settings-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4);
+            z-index: 1999;
+            display: none;
+        }
+        .settings-overlay.visible { display: block; }
+
+        .settings-panel {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: #3b3b3b;
+            border: 1px solid #666;
+            border-radius: 6px;
+            padding: 16px;
+            z-index: 2000;
+            display: none;
+            min-width: 260px;
+            max-height: 80%;
+            overflow-y: auto;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+            color: #ddd;
+        }
+        .settings-panel.visible { display: block; }
+
+        .settings-panel h3 {
+            margin: 0 0 12px 0;
+            font-size: 13px;
+            font-weight: 600;
+            color: #8eb8d4;
+            border-bottom: 1px solid #555;
+            padding-bottom: 8px;
+        }
+
+        .setting-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .setting-row label {
+            flex: 0 0 110px;
+            font-size: 11px;
+            color: #ccc;
+        }
+
+        .setting-row input[type="number"],
+        .setting-row select {
+            flex: 1;
+            background: #505050;
+            color: #e0e0e0;
+            border: 1px solid #666;
+            padding: 4px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-family: inherit;
+        }
+
+        .setting-row input[type="color"] {
+            flex: 1;
+            height: 28px;
+            border: 1px solid #666;
+            background: #505050;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+
+        .setting-row input[type="checkbox"] {
+            accent-color: #8eb8d4;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 14px;
+            padding-top: 10px;
+            border-top: 1px solid #555;
+        }
+
+        .button-row button {
+            flex: 1;
+            padding: 5px 10px;
+            font-size: 11px;
+            background: #505050;
+            color: #e0e0e0;
+            border: 1px solid #666;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .button-row button:hover {
+            background: #606060;
+        }
+
+        #screenshot {
+            background: #4a6a50;
+            border-color: #5a7a5a;
+        }
+        #screenshot:hover {
+            background: #5a7a60;
+        }
+    </style>
+</head>
+<body>
+    <div id="viewerContainer">
+        <div id="container"></div>
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <div class="loading-text">Ready to load mesh</div>
+        </div>
+
+        <!-- Settings overlay and panel -->
+        <div id="settingsOverlay" class="settings-overlay"></div>
+        <div id="settingsPanel" class="settings-panel">
+            <h3>Appearance</h3>
+            <div class="setting-row">
+                <label>Point Size:</label>
+                <input type="number" id="pointSize" min="1" max="20" step="1" value="5">
+            </div>
+            <div class="setting-row">
+                <label>Mesh Color:</label>
+                <input type="color" id="meshColor" value="#aadeff">
+            </div>
+            <div class="setting-row">
+                <label>Edge Width:</label>
+                <input type="number" id="edgeWidth" min="1" max="10" step="1" value="1">
+            </div>
+            <div class="setting-row">
+                <label>Render Mode:</label>
+                <select id="representationSettings">
+                    <option value="2">Surface</option>
+                    <option value="1">Wireframe</option>
+                    <option value="0">Points</option>
+                </select>
+            </div>
+            <div class="setting-row">
+                <label><input type="checkbox" id="parallelProjection"> Parallel Projection</label>
+            </div>
+            <div class="setting-row">
+                <label><input type="checkbox" id="showAxisIndicator"> Axis Indicator</label>
+            </div>
+            <div class="setting-row" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #555;">
+                <label style="font-weight: 600; color: #8eb8d4;">Colormap:</label>
+            </div>
+            <div class="setting-row">
+                <label>Preset:</label>
+                <select id="colormapSelector" style="width: 130px;"></select>
+            </div>
+            <div class="setting-row">
+                <label><input type="checkbox" id="autoColorRange" checked> Auto Range</label>
+            </div>
+            <div class="setting-row">
+                <label>Min:</label>
+                <input type="number" id="colormapMin" step="any" placeholder="Auto" style="width: 110px;">
+            </div>
+            <div class="setting-row">
+                <label>Max:</label>
+                <input type="number" id="colormapMax" step="any" placeholder="Auto" style="width: 110px;">
+            </div>
+            <div class="button-row">
+                <button id="applySettings">Apply</button>
+                <button id="cancelSettings">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="controls">
+        <button id="settingsButton" title="Settings">&#9881;</button>
+
+        <span class="control-separator"></span>
+
+        <label>
+            <input type="checkbox" id="showEdges"> Edges
+        </label>
+
+        <span class="control-separator"></span>
+
+        <button class="view-button" data-view="+X">+X</button>
+        <button class="view-button" data-view="-X">-X</button>
+        <button class="view-button" data-view="+Y">+Y</button>
+        <button class="view-button" data-view="-Y">-Y</button>
+        <button class="view-button" data-view="+Z">+Z</button>
+        <button class="view-button" data-view="-Z">-Z</button>
+
+        <span class="control-separator"></span>
+
+        <label id="filterLabel">
+            Filter:
+            <select id="filterSelector">
+                <option value="">None</option>
+                <option value="normals">Normals</option>
+                <option value="smooth">Smooth</option>
+                <option value="clip_plane">Clip Plane</option>
+                <option value="elevation">Elevation</option>
+                <option value="cell_sizes">Cell Sizes</option>
+                <option value="outline">Outline</option>
+            </select>
+        </label>
+
+        <span class="control-separator"></span>
+
+        <label id="fieldLabel" style="display:none;">
+            Field:
+            <select id="fieldSelector"></select>
+        </label>
+        <label id="channelLabel" style="display:none;">
+            Ch:
+            <select id="channelSelector">
+                <option value="magnitude">Magnitude</option>
+            </select>
+        </label>
+
+        <button id="screenshot">Screenshot</button>
+    </div>
+
+    <!-- VTK.js bundles (copied from comfy-3d-viewers) -->
+    <script src="./js/vtk-gltf.js"></script>
+    <script src="./js/viewer-bundle-vtk.js"></script>
+
+    <script>
+        const {
+            CameraController,
+            ActorManager,
+            FieldVisualization,
+            ScreenshotCapture,
+            AxisIndicator,
+            loadMesh,
+            detectFormat,
+            sendMeshLoaded,
+            sendError,
+            extractFilename,
+            hexToRgb,
+            rgbToString
+        } = window.GeomPackViewer;
+
+        console.log('[PyVista Viewer] Initializing...');
+
+        const loading = document.getElementById('loading');
+        const loadingText = loading.querySelector('.loading-text');
+        const container = document.getElementById('container');
+
+        // VTK setup
+        const vtkRenderWindow = vtk.Rendering.Core.vtkRenderWindow;
+        const vtkRenderer = vtk.Rendering.Core.vtkRenderer;
+        const vtkOpenGLRenderWindow = vtk.Rendering.OpenGL.vtkRenderWindow;
+        const vtkRenderWindowInteractor = vtk.Rendering.Core.vtkRenderWindowInteractor;
+        const vtkInteractorStyleTrackballCamera = vtk.Interaction.Style.vtkInteractorStyleTrackballCamera;
+        const vtkActor = vtk.Rendering.Core.vtkActor;
+        const vtkMapper = vtk.Rendering.Core.vtkMapper;
+        const vtkPolyDataNormals = vtk.Filters.Core.vtkPolyDataNormals;
+
+        // Create render window
+        const renderWindow = vtkRenderWindow.newInstance();
+        const renderer = vtkRenderer.newInstance();
+
+        // PyVista default gradient background
+        renderer.setBackground(0.32, 0.34, 0.43);   // top color (paraview blue-gray)
+        renderer.setBackground2(0.18, 0.19, 0.25);   // bottom color (dark)
+        renderer.setGradientBackground(true);
+
+        renderWindow.addRenderer(renderer);
+
+        const openGLRenderWindow = vtkOpenGLRenderWindow.newInstance();
+        openGLRenderWindow.setContainer(container);
+        renderWindow.addView(openGLRenderWindow);
+
+        const { width, height } = container.getBoundingClientRect();
+        openGLRenderWindow.setSize(width, height);
+
+        const interactor = vtkRenderWindowInteractor.newInstance();
+        interactor.setView(openGLRenderWindow);
+        interactor.initialize();
+        interactor.bindEvents(container);
+
+        const interactorStyle = vtkInteractorStyleTrackballCamera.newInstance();
+        interactor.setInteractorStyle(interactorStyle);
+
+        // Initialize modules
+        const cameraController = new CameraController(renderer, renderWindow, {
+            distanceMultiplier: 2.5
+        });
+        const actorManager = new ActorManager(renderWindow);
+        const fieldVisualization = new FieldVisualization(vtk, renderWindow);
+        const screenshotCapture = new ScreenshotCapture(renderWindow);
+        const axisIndicator = new AxisIndicator(vtk, interactor, {
+            enabled: false,
+            corner: 'BOTTOM_LEFT'
+        });
+
+        // Create actor/mapper
+        const actor = vtkActor.newInstance();
+        const mapper = vtkMapper.newInstance();
+        actor.setMapper(mapper);
+
+        // PyVista default appearance — lightblue mesh with good lighting
+        const property = actor.getProperty();
+        property.setEdgeVisibility(false);
+        property.setColor(0.67, 0.85, 1.0);   // PyVista lightblue
+        property.setAmbient(0.3);
+        property.setDiffuse(0.7);
+        property.setSpecular(0.3);
+        property.setSpecularPower(20);
+        property.setRepresentation(2);  // Surface
+
+        renderer.addActor(actor);
+
+        // State
+        let currentReader = null;
+        let currentFilename = null;
+        let meshBounds = null;
+        let currentPolyData = null;
+        let originalPolyData = null;
+        let isCurrentDataPointCloud = false;
+        let fieldComponentMap = {};
+
+        let currentSettings = {
+            pointSize: 5,
+            meshColor: '#aadeff',
+            edgeWidth: 1,
+            representation: 2,
+            parallelProjection: false,
+            showAxisIndicator: false
+        };
+
+        function showLoading(show, text = 'Loading mesh...') {
+            loading.style.display = show ? 'flex' : 'none';
+            loading.style.color = '#e0e0e0';
+            loadingText.textContent = text;
+        }
+
+        // Camera state sync
+        let _cameraWheelTimer = null;
+        function sendCameraState() {
+            const cam = renderer.getActiveCamera();
+            window.parent.postMessage({
+                type: 'WIDGET_UPDATE',
+                widget: 'camera_state',
+                value: JSON.stringify({
+                    position: cam.getPosition(),
+                    focalPoint: cam.getFocalPoint(),
+                    viewUp: cam.getViewUp()
+                })
+            }, '*');
+        }
+
+        function applyCameraState(cameraState) {
+            if (!cameraState) return false;
+            try {
+                const cs = typeof cameraState === 'string' ? JSON.parse(cameraState) : cameraState;
+                if (!cs.position || !cs.focalPoint || !cs.viewUp) return false;
+                const cam = renderer.getActiveCamera();
+                cam.setPosition(...cs.position);
+                cam.setFocalPoint(...cs.focalPoint);
+                cam.setViewUp(...cs.viewUp);
+                renderer.resetCameraClippingRange();
+                return true;
+            } catch(e) { return false; }
+        }
+
+        interactor.onEndAnimation(() => sendCameraState());
+        container.addEventListener('wheel', () => {
+            clearTimeout(_cameraWheelTimer);
+            _cameraWheelTimer = setTimeout(sendCameraState, 150);
+        });
+
+        // Load mesh
+        async function loadMeshFile(filepath, lineWidth = 1.0, showEdges = false, cameraState = null, selectedField = null) {
+            console.log('[PyVista Viewer] Loading:', filepath);
+            showLoading(true, 'Loading mesh...');
+
+            const urlParams = new URLSearchParams(filepath.split('?')[1] || '');
+            currentFilename = urlParams.get('filename') || filepath.split('/').pop().split('?')[0];
+
+            try {
+                const isSTL = filepath.includes('.stl');
+                const isOBJ = filepath.includes('.obj');
+                const isVTP = filepath.includes('.vtp');
+                const isPLY = filepath.includes('.ply');
+
+                if (!isSTL && !isOBJ && !isVTP && !isPLY) {
+                    throw new Error('Unsupported format. Use STL, OBJ, VTP, or PLY.');
+                }
+
+                const response = await fetch(filepath);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const arrayBuffer = await response.arrayBuffer();
+
+                if (isSTL) {
+                    currentReader = vtk.IO.Geometry.vtkSTLReader.newInstance();
+                    currentReader.parseAsArrayBuffer(arrayBuffer);
+                } else if (isOBJ) {
+                    currentReader = vtk.IO.Misc.vtkOBJReader.newInstance();
+                    const text = new TextDecoder().decode(arrayBuffer);
+                    currentReader.parseAsText(text);
+                } else if (isVTP) {
+                    currentReader = vtk.IO.XML.vtkXMLPolyDataReader.newInstance();
+                    currentReader.parseAsArrayBuffer(arrayBuffer);
+                } else if (isPLY) {
+                    currentReader = vtk.IO.Geometry.vtkPLYReader.newInstance();
+                    currentReader.parseAsArrayBuffer(arrayBuffer);
+                }
+
+                const polydata = currentReader.getOutputData();
+                if (!polydata) {
+                    throw new Error('Failed to parse mesh data');
+                }
+
+                currentPolyData = polydata;
+                originalPolyData = polydata;
+                meshBounds = polydata.getBounds();
+
+                document.getElementById('filterSelector').value = '';
+
+                const numPolys = polydata.getNumberOfPolys();
+                isCurrentDataPointCloud = numPolys === 0;
+
+                if (isCurrentDataPointCloud) {
+                    mapper.setInputData(polydata);
+                    property.setRepresentation(0);
+                    property.setPointSize(currentSettings.pointSize);
+                } else {
+                    const normalsFilter = vtkPolyDataNormals.newInstance();
+                    normalsFilter.setInputData(polydata);
+                    normalsFilter.update();
+                    const filteredPolyData = normalsFilter.getOutputData();
+                    mapper.setInputData(filteredPolyData);
+                    currentPolyData = filteredPolyData;
+                }
+                mapper.update();
+
+                property.setLineWidth(lineWidth);
+                populateFieldSelectors(polydata);
+
+                if (!applyCameraState(cameraState)) {
+                    cameraController.positionInitialCamera(meshBounds);
+                }
+
+                renderWindow.render();
+
+                requestAnimationFrame(() => {
+                    openGLRenderWindow.setSize(container.clientWidth, container.clientHeight);
+                    renderer.resetCameraClippingRange();
+                    renderWindow.render();
+                    interactor.enable();
+                });
+
+                property.setEdgeVisibility(showEdges);
+                document.getElementById('showEdges').checked = showEdges;
+
+                if (selectedField) {
+                    const fieldSelector = document.getElementById('fieldSelector');
+                    if (fieldSelector && Array.from(fieldSelector.options).some(o => o.value === selectedField)) {
+                        fieldSelector.value = selectedField;
+                        updateChannelSelector();
+                        updateColormap();
+                    }
+                }
+
+                showLoading(false);
+                console.log('[PyVista Viewer] Loaded:', polydata.getNumberOfPoints(), 'points');
+
+            } catch (error) {
+                console.error('[PyVista Viewer] Error:', error);
+                showLoading(true, `Error: ${error.message}`);
+                loading.style.color = '#ff6b6b';
+
+                if (window.parent) {
+                    window.parent.postMessage({ type: 'MESH_ERROR', error: error.message }, '*');
+                }
+            }
+        }
+
+        // Field selectors
+        function populateFieldSelectors(polydata) {
+            const fieldSelector = document.getElementById('fieldSelector');
+            const fieldLabel = document.getElementById('fieldLabel');
+            const colormapSelector = document.getElementById('colormapSelector');
+
+            fieldSelector.innerHTML = '<option value="">None</option>';
+            fieldComponentMap = {};
+
+            const fieldInfo = fieldVisualization.extractFields(polydata);
+
+            if (fieldInfo.hasFields) {
+                fieldInfo.allFields.forEach(field => {
+                    const option = document.createElement('option');
+                    option.value = field.fullName;
+                    option.textContent = field.displayName;
+                    fieldSelector.appendChild(option);
+                    fieldComponentMap[field.fullName] = field.numComponents;
+                });
+
+                fieldLabel.style.display = 'flex';
+
+                const colormapOptions = fieldVisualization.getColormapOptions(true);
+                colormapSelector.innerHTML = '';
+                colormapOptions.forEach(opt => {
+                    const option = document.createElement('option');
+                    option.value = opt.value;
+                    option.textContent = opt.label;
+                    if (opt.disabled) option.disabled = true;
+                    if (opt.value === 'erdc_rainbow_bright') option.selected = true;
+                    colormapSelector.appendChild(option);
+                });
+            } else {
+                fieldLabel.style.display = 'none';
+            }
+
+            updateChannelSelector();
+        }
+
+        function updateChannelSelector() {
+            const fieldName = document.getElementById('fieldSelector').value;
+            const channelSelector = document.getElementById('channelSelector');
+            const channelLabel = document.getElementById('channelLabel');
+            const numComponents = fieldComponentMap[fieldName] || 1;
+
+            if (!fieldName || numComponents <= 1) {
+                channelLabel.style.display = 'none';
+                channelSelector.value = 'magnitude';
+                return;
+            }
+
+            channelSelector.innerHTML = '<option value="magnitude">Magnitude</option>';
+            if (numComponents === 3) {
+                channelSelector.innerHTML += '<option value="0">X</option><option value="1">Y</option><option value="2">Z</option>';
+            } else {
+                for (let i = 0; i < numComponents; i++) {
+                    channelSelector.innerHTML += `<option value="${i}">Component ${i}</option>`;
+                }
+            }
+            channelLabel.style.display = 'flex';
+        }
+
+        function updateColormap() {
+            const fieldName = document.getElementById('fieldSelector').value;
+            if (!fieldName || !currentPolyData) {
+                mapper.setScalarVisibility(false);
+                property.setColor(0.67, 0.85, 1.0);
+                document.getElementById('channelLabel').style.display = 'none';
+                renderWindow.render();
+                return;
+            }
+
+            const channelValue = document.getElementById('channelSelector').value;
+            const numComponents = fieldComponentMap[fieldName] || 1;
+
+            let effectiveFieldName = fieldName;
+            if (numComponents > 1 && channelValue !== 'magnitude') {
+                effectiveFieldName = extractComponentAsField(fieldName, parseInt(channelValue));
+            }
+
+            const colormapName = document.getElementById('colormapSelector').value || 'erdc_rainbow_bright';
+            const autoRange = document.getElementById('autoColorRange').checked;
+
+            let range = null;
+            if (!autoRange) {
+                const minVal = parseFloat(document.getElementById('colormapMin').value);
+                const maxVal = parseFloat(document.getElementById('colormapMax').value);
+                if (!isNaN(minVal) && !isNaN(maxVal)) {
+                    range = [minVal, maxVal];
+                }
+            }
+
+            fieldVisualization.applyField(mapper, currentPolyData, effectiveFieldName, {
+                colormap: colormapName,
+                range: range,
+                render: false
+            });
+
+            if (autoRange) {
+                const isCellData = effectiveFieldName.startsWith('cell:');
+                const actualName = isCellData ? effectiveFieldName.substring(5) : effectiveFieldName.substring(6);
+                const data = isCellData ? currentPolyData.getCellData() : currentPolyData.getPointData();
+                const array = data.getArrayByName(actualName);
+                if (array) {
+                    const dataRange = array.getRange();
+                    document.getElementById('colormapMin').value = dataRange[0].toFixed(3);
+                    document.getElementById('colormapMax').value = dataRange[1].toFixed(3);
+                }
+            }
+
+            renderWindow.render();
+        }
+
+        function extractComponentAsField(fieldName, componentIdx) {
+            const vtkDataArray = vtk.Common.Core.vtkDataArray;
+            const isCellData = fieldName.startsWith('cell:');
+            const actualName = isCellData ? fieldName.substring(5) : fieldName.substring(6);
+            const data = isCellData ? currentPolyData.getCellData() : currentPolyData.getPointData();
+            const srcArray = data.getArrayByName(actualName);
+
+            if (!srcArray) return fieldName;
+
+            const numComponents = srcArray.getNumberOfComponents();
+            const numTuples = srcArray.getNumberOfTuples();
+            const srcData = srcArray.getData();
+            const extracted = new Float32Array(numTuples);
+
+            for (let i = 0; i < numTuples; i++) {
+                extracted[i] = srcData[i * numComponents + componentIdx];
+            }
+
+            const channelNames = numComponents === 3 ? ['X', 'Y', 'Z'] : null;
+            const suffix = channelNames ? channelNames[componentIdx] : `c${componentIdx}`;
+            const newName = `${actualName}_${suffix}`;
+
+            const existing = data.getArrayByName(newName);
+            if (!existing) {
+                data.addArray(vtkDataArray.newInstance({
+                    name: newName,
+                    values: extracted,
+                    numberOfComponents: 1,
+                }));
+            } else {
+                existing.setData(extracted);
+            }
+
+            return (isCellData ? 'cell:' : 'point:') + newName;
+        }
+
+        // Filters
+        function applyFilter(filterType) {
+            if (!originalPolyData) return;
+            if (!filterType) { resetToOriginal(); return; }
+
+            try {
+                if (filterType === 'normals') applyNormals();
+                else if (filterType === 'smooth') applySmooth();
+                else if (filterType === 'clip_plane') applyClipPlane();
+                else if (filterType === 'elevation') applyElevation();
+                else if (filterType === 'cell_sizes') applyCellSizes();
+                else if (filterType === 'outline') applyOutline();
+            } catch (error) {
+                console.error('[PyVista Viewer] Filter error:', error);
+            }
+        }
+
+        function resetToOriginal() {
+            if (!originalPolyData) return;
+            const normalsFilter = vtkPolyDataNormals.newInstance();
+            normalsFilter.setInputData(originalPolyData);
+            normalsFilter.update();
+            const filteredPolyData = normalsFilter.getOutputData();
+            mapper.setInputData(filteredPolyData);
+            currentPolyData = filteredPolyData;
+            mapper.setScalarVisibility(false);
+            property.setColor(0.67, 0.85, 1.0);
+            mapper.update();
+            populateFieldSelectors(originalPolyData);
+            renderWindow.render();
+        }
+
+        function applySmooth() {
+            const smoother = vtk.Filters.General.vtkWindowedSincPolyDataFilter.newInstance();
+            smoother.setInputData(originalPolyData);
+            smoother.setNumberOfIterations(20);
+            smoother.update();
+            const smoothed = smoother.getOutputData();
+            const normalsFilter = vtkPolyDataNormals.newInstance();
+            normalsFilter.setInputData(smoothed);
+            normalsFilter.update();
+            const result = normalsFilter.getOutputData();
+            mapper.setInputData(result);
+            currentPolyData = result;
+            mapper.update();
+            populateFieldSelectors(smoothed);
+            renderWindow.render();
+        }
+
+        function applyClipPlane() {
+            const bounds = originalPolyData.getBounds();
+            const center = [(bounds[0]+bounds[1])/2, (bounds[2]+bounds[3])/2, (bounds[4]+bounds[5])/2];
+            const plane = vtk.Common.DataModel.vtkPlane.newInstance();
+            plane.setOrigin(center);
+            plane.setNormal([0, 0, 1]);
+            const cutter = vtk.Filters.Core.vtkCutter.newInstance();
+            cutter.setCutFunction(plane);
+            cutter.setInputData(originalPolyData);
+            cutter.update();
+            const result = cutter.getOutputData();
+            mapper.setInputData(result);
+            currentPolyData = result;
+            mapper.update();
+            populateFieldSelectors(result);
+            renderWindow.render();
+        }
+
+        function applyElevation() {
+            const vtkDataArray = vtk.Common.Core.vtkDataArray;
+            const normalsFilter = vtkPolyDataNormals.newInstance();
+            normalsFilter.setInputData(originalPolyData);
+            normalsFilter.update();
+            const polydata = normalsFilter.getOutputData();
+            const points = polydata.getPoints();
+            const numPoints = points.getNumberOfPoints();
+            const elevation = new Float32Array(numPoints);
+            const bounds = polydata.getBounds();
+            const lo = bounds[4], hi = bounds[5], range = hi - lo;
+            for (let i = 0; i < numPoints; i++) {
+                const pt = points.getPoint(i);
+                elevation[i] = range > 0 ? (pt[2] - lo) / range : 0;
+            }
+            polydata.getPointData().addArray(vtkDataArray.newInstance({
+                name: 'Elevation', values: elevation, numberOfComponents: 1,
+            }));
+            mapper.setInputData(polydata);
+            currentPolyData = polydata;
+            mapper.update();
+            populateFieldSelectors(polydata);
+            document.getElementById('fieldSelector').value = 'point:Elevation';
+            updateColormap();
+        }
+
+        function applyCellSizes() {
+            const vtkDataArray = vtk.Common.Core.vtkDataArray;
+            const normalsFilter = vtkPolyDataNormals.newInstance();
+            normalsFilter.setInputData(originalPolyData);
+            normalsFilter.update();
+            const polydata = normalsFilter.getOutputData();
+            const pointsData = polydata.getPoints().getData();
+            const polysData = polydata.getPolys().getData();
+            const numCells = polydata.getNumberOfCells();
+            const areas = new Float32Array(numCells);
+            let offset = 0, cellIdx = 0;
+            while (offset < polysData.length && cellIdx < numCells) {
+                const nPts = polysData[offset];
+                if (nPts >= 3) {
+                    const i0=polysData[offset+1], i1=polysData[offset+2], i2=polysData[offset+3];
+                    const p0=[pointsData[i0*3],pointsData[i0*3+1],pointsData[i0*3+2]];
+                    const p1=[pointsData[i1*3],pointsData[i1*3+1],pointsData[i1*3+2]];
+                    const p2=[pointsData[i2*3],pointsData[i2*3+1],pointsData[i2*3+2]];
+                    const v1=[p1[0]-p0[0],p1[1]-p0[1],p1[2]-p0[2]];
+                    const v2=[p2[0]-p0[0],p2[1]-p0[1],p2[2]-p0[2]];
+                    const cross=[v1[1]*v2[2]-v1[2]*v2[1],v1[2]*v2[0]-v1[0]*v2[2],v1[0]*v2[1]-v1[1]*v2[0]];
+                    areas[cellIdx] = 0.5*Math.sqrt(cross[0]**2+cross[1]**2+cross[2]**2);
+                }
+                offset += nPts+1;
+                cellIdx++;
+            }
+            polydata.getCellData().addArray(vtkDataArray.newInstance({
+                name: 'Area', values: areas, numberOfComponents: 1,
+            }));
+            mapper.setInputData(polydata);
+            currentPolyData = polydata;
+            mapper.update();
+            populateFieldSelectors(polydata);
+            document.getElementById('fieldSelector').value = 'cell:Area';
+            updateColormap();
+        }
+
+        function applyNormals() {
+            const normalsFilter = vtkPolyDataNormals.newInstance();
+            normalsFilter.setInputData(originalPolyData);
+            normalsFilter.setComputePointNormals(true);
+            normalsFilter.setComputeCellNormals(true);
+            normalsFilter.update();
+            const result = normalsFilter.getOutputData();
+            mapper.setInputData(result);
+            currentPolyData = result;
+            mapper.update();
+            populateFieldSelectors(result);
+            document.getElementById('fieldSelector').value = 'point:Normals';
+            updateColormap();
+        }
+
+        function applyOutline() {
+            const outline = vtk.Filters.General.vtkOutlineFilter.newInstance();
+            outline.setInputData(originalPolyData);
+            outline.update();
+            const result = outline.getOutputData();
+            mapper.setInputData(result);
+            currentPolyData = result;
+            mapper.setScalarVisibility(false);
+            property.setColor(0.67, 0.85, 1.0);
+            mapper.update();
+            populateFieldSelectors(result);
+            renderWindow.render();
+        }
+
+        // Camera view
+        function setCameraView(direction) {
+            if (!meshBounds) return;
+            cameraController.setCameraView(direction, meshBounds);
+            renderWindow.render();
+        }
+
+        // Event listeners
+        document.querySelectorAll('.view-button').forEach(button => {
+            button.addEventListener('click', () => setCameraView(button.dataset.view));
+        });
+
+        document.getElementById('showEdges').addEventListener('change', (e) => {
+            property.setEdgeVisibility(e.target.checked);
+            renderWindow.render();
+            window.parent.postMessage({ type: 'WIDGET_UPDATE', widget: 'show_edges', value: e.target.checked }, '*');
+        });
+
+        document.getElementById('filterSelector').addEventListener('change', (e) => applyFilter(e.target.value));
+
+        document.getElementById('fieldSelector').addEventListener('change', () => {
+            updateChannelSelector();
+            updateColormap();
+            window.parent.postMessage({
+                type: 'WIDGET_UPDATE', widget: 'selected_field',
+                value: document.getElementById('fieldSelector').value
+            }, '*');
+        });
+
+        document.getElementById('channelSelector').addEventListener('change', updateColormap);
+        document.getElementById('colormapSelector').addEventListener('change', updateColormap);
+
+        document.getElementById('autoColorRange').addEventListener('change', (e) => {
+            document.getElementById('colormapMin').disabled = e.target.checked;
+            document.getElementById('colormapMax').disabled = e.target.checked;
+            updateColormap();
+        });
+
+        document.getElementById('colormapMin').addEventListener('change', () => {
+            if (!document.getElementById('autoColorRange').checked) updateColormap();
+        });
+        document.getElementById('colormapMax').addEventListener('change', () => {
+            if (!document.getElementById('autoColorRange').checked) updateColormap();
+        });
+
+        document.getElementById('screenshot').addEventListener('click', async () => {
+            renderWindow.render();
+            const image = await screenshotCapture.capture();
+            window.parent.postMessage({ type: 'SCREENSHOT', image: image, timestamp: Date.now() }, '*');
+        });
+
+        // Settings panel
+        const settingsButton = document.getElementById('settingsButton');
+        const settingsPanel = document.getElementById('settingsPanel');
+        const settingsOverlay = document.getElementById('settingsOverlay');
+
+        settingsButton.addEventListener('click', () => {
+            document.getElementById('pointSize').value = currentSettings.pointSize;
+            document.getElementById('meshColor').value = currentSettings.meshColor;
+            document.getElementById('edgeWidth').value = currentSettings.edgeWidth;
+            document.getElementById('representationSettings').value = currentSettings.representation;
+            document.getElementById('parallelProjection').checked = currentSettings.parallelProjection;
+            document.getElementById('showAxisIndicator').checked = currentSettings.showAxisIndicator;
+
+            const repr = document.getElementById('representationSettings');
+            if (isCurrentDataPointCloud) {
+                repr.value = '0';
+                repr.disabled = true;
+            } else {
+                repr.disabled = false;
+            }
+
+            settingsPanel.classList.add('visible');
+            settingsOverlay.classList.add('visible');
+        });
+
+        function closeSettings() {
+            settingsPanel.classList.remove('visible');
+            settingsOverlay.classList.remove('visible');
+        }
+
+        settingsOverlay.addEventListener('click', closeSettings);
+        document.getElementById('cancelSettings').addEventListener('click', closeSettings);
+
+        document.getElementById('applySettings').addEventListener('click', () => {
+            const newPointSize = parseFloat(document.getElementById('pointSize').value);
+            const newColor = document.getElementById('meshColor').value;
+            const newEdgeWidth = parseFloat(document.getElementById('edgeWidth').value);
+            const newRepresentation = parseInt(document.getElementById('representationSettings').value);
+            const newParallel = document.getElementById('parallelProjection').checked;
+            const newAxisIndicator = document.getElementById('showAxisIndicator').checked;
+
+            const rgb = hexToRgb(newColor);
+            mapper.setScalarVisibility(false);
+            property.setColor(rgb[0], rgb[1], rgb[2]);
+            property.setLineWidth(newEdgeWidth);
+            property.setPointSize(newPointSize);
+
+            if (!isCurrentDataPointCloud) {
+                property.setRepresentation(newRepresentation);
+            }
+
+            cameraController.setParallelProjection(newParallel);
+            axisIndicator.setEnabled(newAxisIndicator);
+
+            currentSettings = {
+                pointSize: newPointSize,
+                meshColor: newColor,
+                edgeWidth: newEdgeWidth,
+                representation: newRepresentation,
+                parallelProjection: newParallel,
+                showAxisIndicator: newAxisIndicator
+            };
+
+            renderWindow.render();
+            closeSettings();
+        });
+
+        // Resize
+        const resizeObserver = new ResizeObserver(() => {
+            const { width, height } = container.getBoundingClientRect();
+            if (width > 0 && height > 0) {
+                openGLRenderWindow.setSize(width, height);
+                renderWindow.render();
+            }
+        });
+        resizeObserver.observe(container);
+
+        // Listen for messages from parent
+        window.addEventListener('message', (event) => {
+            if (event.data.type === 'LOAD_MESH') {
+                const lineWidth = event.data.lineWidth || 1.0;
+                const showEdges = event.data.showEdges || false;
+                const cameraState = event.data.cameraState || null;
+                const selectedField = event.data.selectedField || null;
+                loadMeshFile(event.data.filepath, lineWidth, showEdges, cameraState, selectedField);
+            }
+        });
+
+        console.log('[PyVista Viewer] Ready');
+    </script>
+</body>
+</html>
