@@ -246,6 +246,7 @@
             try {
                 meshData = parseSMPCBin(buffer);
                 console.log(`[SMPC] Loaded: ${meshData.numFrames} frames, ${meshData.numVerts} verts, camera=${meshData.hasCamera}, incam=${meshData.incamVertices !== null}`);
+                console.log('[SMPC] Loaded successfully');
 
                 // Remove old mesh
                 if (smplMesh) {

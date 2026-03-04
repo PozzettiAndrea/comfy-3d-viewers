@@ -552,7 +552,7 @@
                 oc.FS.unlink('/' + filename);
 
                 loadingDiv.style.display = 'none';
-                console.log('[OCC] CAD file loaded successfully');
+                console.log('[OCC] CAD file Loaded successfully');
 
             } catch (error) {
                 console.error('[OCC] Error loading CAD file:', error);
@@ -716,7 +716,7 @@
                     glbpath,
                     // onLoad callback
                     (gltf) => {
-                        console.log('[OCC] GLB loaded successfully');
+                        console.log('[OCC] GLB Loaded successfully');
                         logDebug('[OCC DEBUG] GLTF structure:', gltf);
                         logDebug('[OCC DEBUG] Scene children count:', gltf.scene.children.length);
 
@@ -777,7 +777,7 @@
                         fitCameraToModel();
 
                         loadingDiv.style.display = 'none';
-                        console.log('[OCC] GLB mesh loaded successfully (server-side tessellation)');
+                        console.log('[OCC] GLB mesh Loaded successfully (server-side tessellation)');
                         logDebug('[OCC DEBUG] Mesh vertex count:', geometry.attributes.position.count);
                         logDebug('[OCC DEBUG] Mesh face count:', geometry.index ? geometry.index.count / 3 : 'no indices');
                     },
@@ -856,7 +856,7 @@
                 fitCameraToModel();
 
                 loadingDiv.style.display = 'none';
-                console.log('[OCC] Mesh loaded successfully (server-side tessellation)');
+                console.log('[OCC] Mesh Loaded successfully (server-side tessellation)');
 
             } catch (error) {
                 console.error('[OCC] Error loading mesh:', error);
@@ -918,7 +918,7 @@
                 fitCameraToModel();
 
                 loadingDiv.style.display = 'none';
-                console.log('[OCC] Mesh loaded successfully from inline data (json_pass mode)');
+                console.log('[OCC] Mesh Loaded successfully from inline data (json_pass mode)');
 
             } catch (error) {
                 console.error('[OCC] Error loading inline mesh:', error);

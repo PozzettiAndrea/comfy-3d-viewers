@@ -147,7 +147,7 @@
                         texture.mapping = THREE.EquirectangularReflectionMapping;
                         scene.environment = texture;
                         envMapLoaded = true;
-                        console.log('[GeomPack PBR Viewer] Environment map loaded successfully');
+                        console.log('[GeomPack PBR Viewer] Environment map Loaded successfully');
                         resolve(texture);
                     },
                     (progress) => {
@@ -375,7 +375,7 @@
 
                     loading.style.display = 'none';
                     info.textContent = `PBR Viewer | ${meshCount} mesh(es) | Textures: ${hasTextures ? 'Yes' : 'No'}`;
-                    console.log('[GeomPack PBR Viewer] Mesh loaded successfully');
+                    console.log('[GeomPack PBR Viewer] Mesh Loaded successfully');
                 },
                 (progress) => {
                     if (progress.lengthComputable) {
