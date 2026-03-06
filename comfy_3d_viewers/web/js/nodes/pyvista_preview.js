@@ -27,6 +27,12 @@ app.registerExtension({
                     camera_position: "",     // trame viewer camera (position/focalPoint/viewUp)
                     selected_field: "",
                     viewer_mode: "",
+                    // Trame UI toggle settings
+                    edge_visibility: false,
+                    outline_visibility: false,
+                    grid_visibility: false,
+                    axis_visibility: true,
+                    parallel_projection: false,
                 };
 
                 // Create container, iframe, and info panel
@@ -64,11 +70,24 @@ app.registerExtension({
                         const w = node.widgets?.find(w => w.name === name);
                         if (w) w.value = value;
                     }
-                    // When camera bridge inside trame iframe is ready, restore saved camera
-                    if (event.data.type === 'CAMERA_BRIDGE_READY' && viewerState.camera_position && iframe.contentWindow) {
+                    // When camera bridge inside trame iframe is ready, restore saved state
+                    if (event.data.type === 'CAMERA_BRIDGE_READY' && iframe.contentWindow) {
+                        if (viewerState.camera_position) {
+                            iframe.contentWindow.postMessage({
+                                type: 'RESTORE_CAMERA',
+                                camera: viewerState.camera_position,
+                            }, '*');
+                        }
+                        // Restore trame UI settings
                         iframe.contentWindow.postMessage({
-                            type: 'RESTORE_CAMERA',
-                            camera: viewerState.camera_position,
+                            type: 'RESTORE_SETTINGS',
+                            settings: {
+                                edge_visibility: viewerState.edge_visibility,
+                                outline_visibility: viewerState.outline_visibility,
+                                grid_visibility: viewerState.grid_visibility,
+                                axis_visibility: viewerState.axis_visibility,
+                                parallel_projection: viewerState.parallel_projection,
+                            },
                         }, '*');
                     }
                 });
