@@ -288,6 +288,12 @@
                     <option value="none">None</option>
                 </select>
             </label>
+            <label id="channelLabel" style="display:none;">
+                Channel:
+                <select id="channelSelector">
+                    <option value="magnitude">Magnitude</option>
+                </select>
+            </label>
         </div>
     </div>
 
@@ -317,6 +323,7 @@
         let combinedBounds = null;
         let numMeshes = 0;
         let commonFields = [];  // Fields common to all meshes
+        let fieldComponentMap = {};  // Maps field name -> number of components
 
         // Send camera state to parent node widget (uses first viewport's camera)
         let _cameraWheelTimer = null;
@@ -363,8 +370,12 @@
 
         // Create viewport containers dynamically
         function createViewportContainers(count) {
-            // Clear existing
+            // Clear existing viewports but preserve settings panel elements
+            const overlay = document.getElementById('settingsOverlay');
+            const panel = document.getElementById('settingsPanel');
             viewerContainer.innerHTML = '';
+            if (overlay) viewerContainer.appendChild(overlay);
+            if (panel) viewerContainer.appendChild(panel);
             viewports = [];
 
             // Set grid class
@@ -557,6 +568,70 @@
             }
         }
 
+        function updateChannelSelector() {
+            const fieldName = document.getElementById('fieldSelector').value;
+            const channelSelector = document.getElementById('channelSelector');
+            const channelLabel = document.getElementById('channelLabel');
+
+            const numComponents = fieldComponentMap[fieldName] || 1;
+
+            if (!fieldName || fieldName === 'none' || numComponents <= 1) {
+                channelLabel.style.display = 'none';
+                channelSelector.value = 'magnitude';
+                return;
+            }
+
+            channelSelector.innerHTML = '<option value="magnitude">Magnitude</option>';
+            if (numComponents === 3) {
+                channelSelector.innerHTML += '<option value="0">X</option>';
+                channelSelector.innerHTML += '<option value="1">Y</option>';
+                channelSelector.innerHTML += '<option value="2">Z</option>';
+            } else {
+                for (let i = 0; i < numComponents; i++) {
+                    channelSelector.innerHTML += `<option value="${i}">Component ${i}</option>`;
+                }
+            }
+
+            channelLabel.style.display = '';
+        }
+
+        function extractComponentAsField(polydata, fieldName, componentIdx) {
+            const vtkDataArray = vtk.Common.DataModel.vtkDataArray || vtk.Common.Core.vtkDataArray;
+            const isCellData = fieldName.startsWith('face.');
+            const actualName = isCellData ? fieldName.substring(5) : fieldName;
+            const data = isCellData ? polydata.getCellData() : polydata.getPointData();
+            const srcArray = data.getArrayByName(actualName);
+
+            if (!srcArray) return fieldName;
+
+            const numComponents = srcArray.getNumberOfComponents();
+            const numTuples = srcArray.getNumberOfTuples();
+            const srcData = srcArray.getData();
+            const extracted = new Float32Array(numTuples);
+
+            for (let i = 0; i < numTuples; i++) {
+                extracted[i] = srcData[i * numComponents + componentIdx];
+            }
+
+            const channelNames = numComponents === 3 ? ['X', 'Y', 'Z'] : null;
+            const suffix = channelNames ? channelNames[componentIdx] : `c${componentIdx}`;
+            const newName = `${actualName}_${suffix}`;
+
+            const existing = data.getArrayByName(newName);
+            if (!existing) {
+                const newArray = vtkDataArray.newInstance({
+                    name: newName,
+                    values: extracted,
+                    numberOfComponents: 1,
+                });
+                data.addArray(newArray);
+            } else {
+                existing.setData(extracted);
+            }
+
+            return (isCellData ? 'face.' : '') + newName;
+        }
+
         function populateColormapSelector() {
             const selector = document.getElementById('colormapSelector');
             if (!selector) return;
@@ -602,11 +677,19 @@
             if (!selector) return;
 
             selector.innerHTML = '<option value="none">None</option>';
+            fieldComponentMap = {};
             commonFields.forEach(field => {
                 const option = document.createElement('option');
                 option.value = field;
                 option.textContent = field;
                 selector.appendChild(option);
+                // Use component count from first viewport that has this field
+                for (const vp of viewports) {
+                    if (vp.fieldComponentCounts && vp.fieldComponentCounts[field] != null) {
+                        fieldComponentMap[field] = vp.fieldComponentCounts[field];
+                        break;
+                    }
+                }
             });
 
             // Show field controls if any fields exist
@@ -630,12 +713,28 @@
                 return;
             }
 
+            // Check if a specific component channel is selected
+            const channelValue = document.getElementById('channelSelector')?.value || 'magnitude';
+            const numComponents = fieldComponentMap[fieldName] || 1;
+            const useComponent = numComponents > 1 && channelValue !== 'magnitude';
+            const componentIdx = useComponent ? parseInt(channelValue) : -1;
+
+            // If extracting a component, do it for each viewport first
+            let effectiveFieldName = fieldName;
+            if (useComponent) {
+                viewports.forEach(vp => {
+                    if (vp.polydata) {
+                        effectiveFieldName = extractComponentAsField(vp.polydata, fieldName, componentIdx);
+                    }
+                });
+            }
+
             // Calculate shared range from all meshes
             let sharedMin = Infinity;
             let sharedMax = -Infinity;
 
-            const isCellData = fieldName.startsWith('face.');
-            const actualFieldName = isCellData ? fieldName.substring(5) : fieldName;
+            const isCellData = effectiveFieldName.startsWith('face.');
+            const actualFieldName = isCellData ? effectiveFieldName.substring(5) : effectiveFieldName;
 
             viewports.forEach(vp => {
                 if (vp.polydata) {
@@ -654,7 +753,7 @@
             // Apply to all viewports
             viewports.forEach(vp => {
                 if (vp.mapper && vp.polydata) {
-                    applyFieldToMapper(vp.mapper, vp.polydata, fieldName, sharedRange);
+                    applyFieldToMapper(vp.mapper, vp.polydata, effectiveFieldName, sharedRange);
                     renderWithClippingRangeUpdate(vp.renderer, vp.renderWindow);
                 }
             });
@@ -717,16 +816,20 @@
 
                     // Extract field names from VTP
                     vp.fieldNames = [];
+                    vp.fieldComponentCounts = {};
                     if (isVTP) {
                         const pointData = polydata.getPointData();
                         const cellData = polydata.getCellData();
                         for (let i = 0; i < pointData.getNumberOfArrays(); i++) {
                             const array = pointData.getArray(i);
                             vp.fieldNames.push(array.getName());
+                            vp.fieldComponentCounts[array.getName()] = array.getNumberOfComponents();
                         }
                         for (let i = 0; i < cellData.getNumberOfArrays(); i++) {
                             const array = cellData.getArray(i);
-                            vp.fieldNames.push(`face.${array.getName()}`);
+                            const name = `face.${array.getName()}`;
+                            vp.fieldNames.push(name);
+                            vp.fieldComponentCounts[name] = array.getNumberOfComponents();
                         }
                         console.log(`[GeomPack VTK Multi Viewer] Mesh ${viewportIndex + 1} fields:`, vp.fieldNames);
                     }
@@ -927,12 +1030,21 @@
 
         // Field selector change
         document.getElementById('fieldSelector').addEventListener('change', (e) => {
+            updateChannelSelector();
             applyFieldToAllViewports(e.target.value);
             window.parent.postMessage({
                 type: 'WIDGET_UPDATE',
                 widget: 'selected_field',
                 value: e.target.value
             }, '*');
+        });
+
+        // Channel selector change
+        document.getElementById('channelSelector').addEventListener('change', () => {
+            const currentField = document.getElementById('fieldSelector').value;
+            if (currentField && currentField !== 'none') {
+                applyFieldToAllViewports(currentField);
+            }
         });
 
         // Colormap selector change
