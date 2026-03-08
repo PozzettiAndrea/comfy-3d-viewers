@@ -10,6 +10,9 @@ import { buildMeshInfoHTML } from "./utils/formatting.js";
 import { createScreenshotHandler } from "./utils/screenshot.js";
 import { createViewerManager, createErrorHandler, buildViewUrl } from "./utils/postMessage.js";
 
+const SETTINGS_KEYS = ['edge_visibility', 'outline_visibility', 'grid_visibility',
+                       'axis_visibility', 'parallel_projection'];
+
 app.registerExtension({
     name: "pyvista.preview",
 
@@ -24,7 +27,7 @@ app.registerExtension({
                 const viewerState = {
                     show_edges: false,
                     camera_state: "",        // static viewer camera (legacy)
-                    camera_position: "",     // trame viewer camera (position/focalPoint/viewUp)
+                    camera_position: "",     // trame viewer camera
                     selected_field: "",
                     viewer_mode: "",
                     // Trame UI toggle settings
@@ -61,34 +64,14 @@ app.registerExtension({
 
                 this.setSize(this.computeSize());
 
-                // Bidirectional sync: viewer -> node widgets (both static and trame modes)
-                const node = this;
+                // Listen for WIDGET_UPDATE from iframe (static viewer + trame settings bridge)
                 window.addEventListener('message', (event) => {
-                    if (event.data.type === 'WIDGET_UPDATE') {
+                    if (event.data?.type === 'WIDGET_UPDATE') {
                         const { widget: name, value } = event.data;
-                        if (name in viewerState) viewerState[name] = value;
-                        const w = node.widgets?.find(w => w.name === name);
-                        if (w) w.value = value;
-                    }
-                    // When camera bridge inside trame iframe is ready, restore saved state
-                    if (event.data.type === 'CAMERA_BRIDGE_READY' && iframe.contentWindow) {
-                        if (viewerState.camera_position) {
-                            iframe.contentWindow.postMessage({
-                                type: 'RESTORE_CAMERA',
-                                camera: viewerState.camera_position,
-                            }, '*');
+                        if (name in viewerState) {
+                            console.log('[PyVista] WIDGET_UPDATE:', name, '=', value);
+                            viewerState[name] = value;
                         }
-                        // Restore trame UI settings
-                        iframe.contentWindow.postMessage({
-                            type: 'RESTORE_SETTINGS',
-                            settings: {
-                                edge_visibility: viewerState.edge_visibility,
-                                outline_visibility: viewerState.outline_visibility,
-                                grid_visibility: viewerState.grid_visibility,
-                                axis_visibility: viewerState.axis_visibility,
-                                parallel_projection: viewerState.parallel_projection,
-                            },
-                        }, '*');
                     }
                 });
 
@@ -100,6 +83,28 @@ app.registerExtension({
                 window.addEventListener('message', createErrorHandler(infoPanel, "[PyVista]"));
 
                 this.setSize([512, 640]);
+
+                // Track active trame bridge polling interval
+                let _bridgeInterval = null;
+
+                // Listen for SETTINGS_BRIDGE_READY from injected iframe script
+                window.addEventListener('message', (event) => {
+                    if (event.data?.type === 'SETTINGS_BRIDGE_READY' && event.source === iframe.contentWindow) {
+                        console.log('[PyVista] SETTINGS_BRIDGE_READY received');
+                        // Send saved settings to iframe for restoration
+                        const settings = {};
+                        for (const name of SETTINGS_KEYS) {
+                            if (viewerState[name] !== undefined) {
+                                settings[name] = viewerState[name];
+                            }
+                        }
+                        console.log('[PyVista] Sending RESTORE_SETTINGS:', settings);
+                        iframe.contentWindow.postMessage({
+                            type: 'RESTORE_SETTINGS',
+                            settings: settings,
+                        }, '*');
+                    }
+                });
 
                 // Handle execution
                 const onExecuted = this.onExecuted;
@@ -122,26 +127,34 @@ app.registerExtension({
                     infoPanel.innerHTML = infoHTML;
 
                     if (viewerMode === "trame" && message?.trame_url?.[0]) {
-                        // --- Trame mode: point iframe at reverse-proxied trame server ---
+                        // --- Trame mode ---
                         const trameUrl = message.trame_url[0];
                         const trameNodeId = message?.trame_node_id?.[0] || "";
                         viewerState.viewer_mode = "trame";
 
-                        // Always reload to pick up new scene from re-execution
+                        // Stop previous bridge polling
+                        if (_bridgeInterval) {
+                            clearInterval(_bridgeInterval);
+                            _bridgeInterval = null;
+                        }
+
                         iframe.src = trameUrl;
 
-                        // Inject camera bridge into same-origin trame iframe after it loads
+                        // After iframe loads, start camera bridge + inject settings bridge
                         iframe.onload = () => {
-                            setTimeout(() => {
-                                _injectCameraBridge(iframe, viewerState, trameNodeId);
-                            }, 2000);
+                            _bridgeInterval = _startTrameBridge(iframe, viewerState, trameNodeId);
+                            _injectSettingsBridge(iframe);
                         };
 
                     } else if (message?.mesh_file && message.mesh_file[0]) {
                         // --- Static VTK.js fallback ---
                         const filename = message.mesh_file[0];
-
                         viewerState.viewer_mode = "static";
+
+                        if (_bridgeInterval) {
+                            clearInterval(_bridgeInterval);
+                            _bridgeInterval = null;
+                        }
 
                         const filepath = buildViewUrl(filename);
                         const messageData = {
@@ -163,103 +176,227 @@ app.registerExtension({
     }
 });
 
+// ---------------------------------------------------------------------------
+// Trame bridge: runs entirely in the PARENT frame, directly accessing
+// the same-origin iframe's Vue app. No script injection needed.
+// ---------------------------------------------------------------------------
+
 /**
- * Inject camera bridge script into the same-origin trame iframe.
- * Uses createElement+textContent+appendChild which guarantees execution.
- * The script finds the VtkLocalView Vue component via $refs, hooks canvas
- * events to capture camera, and listens for RESTORE_CAMERA to restore it.
+ * Find the VtkLocalView component in the iframe's Vue app.
+ * Returns { component, prefix } where prefix is the trame state namespace
+ * (e.g. "P_0x..._0_") derived from the ref name, or null if not found.
  */
-function _injectCameraBridge(iframe, viewerState, nodeId) {
-    console.log('[PyVista] _injectCameraBridge called, nodeId=' + nodeId);
+function _findVtkView(iframeDoc) {
+    const appEl = iframeDoc.querySelector('#app');
+    if (!appEl || !appEl.__vue_app__) return null;
+    const vueApp = appEl.__vue_app__;
+
+    // Strategy 1: trame provides.refs — also extracts prefix from ref name
+    const trame = vueApp._context?.provides?.trame;
+    if (trame?.refs) {
+        for (const key of Object.keys(trame.refs)) {
+            const ref = trame.refs[key];
+            if (ref && typeof ref.getCamera === 'function') {
+                // Ref name is "view_P_0x..._0", state prefix is "P_0x..._0_"
+                const prefix = key.startsWith('view_') ? key.slice(5) + '_' : '';
+                return { component: ref, prefix };
+            }
+        }
+    }
+
+    // Strategy 2: Walk vnode tree (no prefix available)
+    if (vueApp._container?._vnode) {
+        const found = _walkVnodeTree(vueApp._container._vnode, 0);
+        if (found) return { component: found, prefix: '' };
+    }
+
+    return null;
+}
+
+function _walkVnodeTree(vnode, depth) {
+    if (!vnode || depth > 15) return null;
+    if (vnode.component) {
+        const inst = vnode.component;
+        if (inst.exposed && typeof inst.exposed.getCamera === 'function') return inst.exposed;
+        if (inst.proxy && typeof inst.proxy.getCamera === 'function') return inst.proxy;
+        if (inst.refs) {
+            for (const k of Object.keys(inst.refs)) {
+                if (inst.refs[k] && typeof inst.refs[k].getCamera === 'function') return inst.refs[k];
+            }
+        }
+        if (inst.subTree) {
+            const r = _walkVnodeTree(inst.subTree, depth + 1);
+            if (r) return r;
+        }
+    }
+    if (Array.isArray(vnode.children)) {
+        for (const child of vnode.children) {
+            const r = _walkVnodeTree(child, depth + 1);
+            if (r) return r;
+        }
+    }
+    return null;
+}
+
+/**
+ * Start the trame camera bridge. Runs in the parent frame with direct access
+ * to the iframe's DOM (same-origin). Handles camera restore + polling only.
+ * Returns the polling interval ID.
+ */
+function _startTrameBridge(iframe, viewerState, nodeId) {
+    let view = null;
+    let lastCamJson = '';
+    let cameraRestored = false;
+    let retryCount = 0;
+    const MAX_RETRIES = 30;
+
+    const intervalId = setInterval(() => {
+        try {
+            const doc = iframe.contentDocument || iframe.contentWindow?.document;
+            if (!doc) return;
+
+            if (!view) {
+                view = _findVtkView(doc);
+                if (!view) {
+                    if (++retryCount >= MAX_RETRIES) clearInterval(intervalId);
+                    return;
+                }
+                try {
+                    const cam = view.component.getCamera();
+                    if (cam) lastCamJson = JSON.stringify(cam);
+                } catch(e) {}
+            }
+
+            const { component } = view;
+
+            // Restore camera once
+            if (!cameraRestored && viewerState.camera_position) {
+                try {
+                    const cam = typeof viewerState.camera_position === 'string'
+                        ? JSON.parse(viewerState.camera_position) : viewerState.camera_position;
+                    component.setCamera(cam);
+                    lastCamJson = JSON.stringify(component.getCamera());
+                    cameraRestored = true;
+                } catch(e) {
+                    cameraRestored = true;
+                }
+            }
+
+            // Poll for camera changes
+            try {
+                const cam = component.getCamera();
+                if (cam) {
+                    const json = JSON.stringify(cam);
+                    if (json !== lastCamJson && lastCamJson !== '') {
+                        viewerState.camera_position = json;
+                        fetch('/trame/api/save_camera', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ node_id: nodeId, camera_position: cam })
+                        }).catch(() => {});
+                    }
+                    lastCamJson = json;
+                }
+            } catch(e) {}
+        } catch(e) {}
+    }, 500);
+
+    return intervalId;
+}
+
+/**
+ * Inject a settings bridge script into the trame iframe.
+ * Runs natively in the iframe's JS context where Vue reactivity works.
+ * Syncs trame UI toggle settings (edges, grid, outline, axis, projection)
+ * back to the parent frame via postMessage.
+ */
+function _injectSettingsBridge(iframe) {
     try {
-        const doc = iframe.contentDocument || iframe.contentWindow.document;
-        console.log('[PyVista] iframe.contentDocument:', doc ? 'OK' : 'null');
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
         if (!doc) return;
 
-        // Remove any previously injected bridge
-        const old = doc.getElementById('comfyui-camera-bridge');
-        if (old) old.remove();
-
         const script = doc.createElement('script');
-        script.id = 'comfyui-camera-bridge';
         script.textContent = `
 (function() {
-    var NODE_ID = ${JSON.stringify(nodeId)};
+    var SETTINGS = ${JSON.stringify(SETTINGS_KEYS)};
     var POLL_MS = 500;
     var MAX_WAIT = 15000;
     var startTime = Date.now();
 
     function init() {
-        // Find VtkLocalView component via Vue app refs
         var appEl = document.querySelector('#app');
         if (!appEl || !appEl.__vue_app__) {
+            console.log('[SettingsBridge] Waiting for Vue app...');
             if (Date.now() - startTime < MAX_WAIT) setTimeout(init, POLL_MS);
             return;
         }
-        var vm = appEl.__vue_app__._instance;
-        var refs = vm && vm.proxy && vm.proxy.$refs;
-        if (!refs) {
+        var vueApp = appEl.__vue_app__;
+        var trame = vueApp._context && vueApp._context.provides && vueApp._context.provides.trame;
+        if (!trame) {
+            console.log('[SettingsBridge] Waiting for trame provides...');
             if (Date.now() - startTime < MAX_WAIT) setTimeout(init, POLL_MS);
             return;
         }
 
-        // Find the VtkLocalView ref (starts with "view_")
-        var component = null;
-        for (var key in refs) {
-            if (key.startsWith('view_') && refs[key] && refs[key].getCamera) {
-                component = refs[key];
-                break;
+        // Derive prefix from trame refs (same strategy as parent _findVtkView)
+        var prefix = '';
+        if (trame.refs) {
+            var refKeys = Object.keys(trame.refs);
+            console.log('[SettingsBridge] trame.refs keys:', refKeys);
+            for (var i = 0; i < refKeys.length; i++) {
+                var key = refKeys[i];
+                var ref = trame.refs[key];
+                if (ref && typeof ref.getCamera === 'function') {
+                    if (key.indexOf('view_') === 0) prefix = key.slice(5) + '_';
+                    break;
+                }
             }
         }
-        if (!component) {
-            if (Date.now() - startTime < MAX_WAIT) setTimeout(init, POLL_MS);
+
+        if (!prefix) {
+            console.log('[SettingsBridge] No prefix found, retrying...');
+            if (Date.now() - startTime < MAX_WAIT) setTimeout(init, 2000);
             return;
         }
 
-        console.log('[CameraBridge] Found VtkLocalView component');
+        var state = trame.state;
+        console.log('[SettingsBridge] Initialized. prefix=' + prefix);
+        console.log('[SettingsBridge] state.get available:', typeof state.get);
+        console.log('[SettingsBridge] state.set available:', typeof state.set);
+        console.log('[SettingsBridge] Test read: ' + prefix + 'edge_visibility =', state.get(prefix + 'edge_visibility'));
 
-        // Hook canvas interaction events to capture camera state
-        var canvas = document.querySelector('canvas');
-        if (canvas) {
-            var timer = null;
-            var sendCamera = function() {
-                try {
-                    var cam = component.getCamera();
-                    if (cam) {
-                        var val = JSON.stringify(cam);
-                        window.parent.postMessage(
-                            { type: 'WIDGET_UPDATE', widget: 'camera_position', value: val },
-                            '*'
-                        );
-                        // Also save to server for cross-execution persistence
-                        fetch('/trame/api/save_camera', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ node_id: NODE_ID, camera_position: cam })
-                        }).catch(function() {});
-                    }
-                } catch(e) { console.warn('[CameraBridge] sendCamera error:', e); }
-            };
-            canvas.addEventListener('mouseup', function() { clearTimeout(timer); timer = setTimeout(sendCamera, 300); });
-            canvas.addEventListener('wheel', function() { clearTimeout(timer); timer = setTimeout(sendCamera, 300); });
-            canvas.addEventListener('touchend', function() { clearTimeout(timer); timer = setTimeout(sendCamera, 300); });
-        }
+        // Poll settings using state.get() and send changes to parent
+        var lastSettings = {};
+        setInterval(function() {
+            for (var i = 0; i < SETTINGS.length; i++) {
+                var name = SETTINGS[i];
+                var val = state.get(prefix + name);
+                if (val !== undefined && val !== lastSettings[name]) {
+                    lastSettings[name] = val;
+                    console.log('[SettingsBridge] Change detected:', name, '=', val);
+                    window.parent.postMessage(
+                        { type: 'WIDGET_UPDATE', widget: name, value: val }, '*'
+                    );
+                }
+            }
+        }, POLL_MS);
 
-        // Listen for camera restore from parent
+        // Listen for settings restore from parent using state.set()
         window.addEventListener('message', function(event) {
-            if (event.data && event.data.type === 'RESTORE_CAMERA' && event.data.camera) {
-                try {
-                    var cam = typeof event.data.camera === 'string'
-                        ? JSON.parse(event.data.camera) : event.data.camera;
-                    component.setCamera(cam);
-                    console.log('[CameraBridge] Camera restored');
-                } catch(e) { console.warn('[CameraBridge] Restore failed:', e); }
+            if (event.data && event.data.type === 'RESTORE_SETTINGS' && event.data.settings) {
+                console.log('[SettingsBridge] Restoring settings:', event.data.settings);
+                var s = event.data.settings;
+                for (var i = 0; i < SETTINGS.length; i++) {
+                    var name = SETTINGS[i];
+                    if (s[name] !== undefined) {
+                        state.set(prefix + name, s[name]);
+                    }
+                }
             }
         });
 
-        // Signal readiness to parent
-        window.parent.postMessage({ type: 'CAMERA_BRIDGE_READY' }, '*');
-        console.log('[CameraBridge] Initialized, node=' + NODE_ID);
+        // Signal ready to parent
+        window.parent.postMessage({ type: 'SETTINGS_BRIDGE_READY' }, '*');
     }
 
     setTimeout(init, 1000);
@@ -267,6 +404,6 @@ function _injectCameraBridge(iframe, viewerState, nodeId) {
 `;
         doc.head.appendChild(script);
     } catch(e) {
-        console.warn('[PyVista] Failed to inject camera bridge:', e);
+        console.error('[PyVista] Failed to inject settings bridge:', e);
     }
 }
