@@ -848,6 +848,11 @@
             if (fieldName) {
                 applyFieldVisualization(fieldName, colormap);
             }
+            window.parent.postMessage({
+                type: 'WIDGET_UPDATE',
+                widget: 'selected_colormap',
+                value: e.target.value
+            }, '*');
         });
 
         // Update slider UI and CSS clip-path
@@ -1005,6 +1010,15 @@
                         mesh2Actor.getProperty().setEdgeVisibility(showEdges);
                     }
                     document.getElementById('showEdges').checked = showEdges;
+
+                    // Restore colormap from parent widget state
+                    const selectedColormap = data.selectedColormap || "";
+                    if (selectedColormap) {
+                        const colormapSel = document.getElementById('colormapSelector');
+                        if (colormapSel && Array.from(colormapSel.options).some(o => o.value === selectedColormap)) {
+                            colormapSel.value = selectedColormap;
+                        }
+                    }
 
                     // Restore selected field from parent widget state
                     const selectedField = data.selectedField || "";

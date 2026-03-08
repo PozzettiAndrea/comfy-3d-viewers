@@ -283,7 +283,7 @@
         });
 
         // Load mesh function
-        async function loadMeshFile(filepath, lineWidth = 1.0, showEdges = false, cameraState = null, selectedField = null) {
+        async function loadMeshFile(filepath, lineWidth = 1.0, showEdges = false, cameraState = null, selectedField = null, selectedChannel = null, selectedColormap = null) {
             console.log('[GeomPack VTK Viewer] Loading:', filepath);
             showLoading(true, 'Loading mesh...');
 
@@ -386,12 +386,26 @@
                 property.setEdgeVisibility(showEdges);
                 document.getElementById('showEdges').checked = showEdges;
 
-                // Restore selected field
+                // Restore selected field, channel, and colormap
                 if (selectedField) {
                     const fieldSelector = document.getElementById('fieldSelector');
                     if (fieldSelector && Array.from(fieldSelector.options).some(o => o.value === selectedField)) {
                         fieldSelector.value = selectedField;
                         updateChannelSelector();
+                        // Restore channel
+                        if (selectedChannel) {
+                            const channelSel = document.getElementById('channelSelector');
+                            if (channelSel && Array.from(channelSel.options).some(o => o.value === selectedChannel)) {
+                                channelSel.value = selectedChannel;
+                            }
+                        }
+                        // Restore colormap
+                        if (selectedColormap) {
+                            const colormapSel = document.getElementById('colormapSelector');
+                            if (colormapSel && Array.from(colormapSel.options).some(o => o.value === selectedColormap)) {
+                                colormapSel.value = selectedColormap;
+                            }
+                        }
                         updateColormap();
                     }
                 }
@@ -858,10 +872,24 @@
         });
 
         // Channel selector
-        document.getElementById('channelSelector').addEventListener('change', updateColormap);
+        document.getElementById('channelSelector').addEventListener('change', () => {
+            updateColormap();
+            window.parent.postMessage({
+                type: 'WIDGET_UPDATE',
+                widget: 'selected_channel',
+                value: document.getElementById('channelSelector').value
+            }, '*');
+        });
 
         // Colormap selector
-        document.getElementById('colormapSelector').addEventListener('change', updateColormap);
+        document.getElementById('colormapSelector').addEventListener('change', () => {
+            updateColormap();
+            window.parent.postMessage({
+                type: 'WIDGET_UPDATE',
+                widget: 'selected_colormap',
+                value: document.getElementById('colormapSelector').value
+            }, '*');
+        });
 
         // Auto range toggle
         document.getElementById('autoColorRange').addEventListener('change', (e) => {
@@ -1075,7 +1103,9 @@
                 const showEdges = event.data.showEdges || false;
                 const cameraState = event.data.cameraState || null;
                 const selectedField = event.data.selectedField || null;
-                loadMeshFile(event.data.filepath, lineWidth, showEdges, cameraState, selectedField);
+                const selectedChannel = event.data.selectedChannel || null;
+                const selectedColormap = event.data.selectedColormap || null;
+                loadMeshFile(event.data.filepath, lineWidth, showEdges, cameraState, selectedField, selectedChannel, selectedColormap);
             } else if (event.data.type === 'FOCUS_ON_POINT') {
                 const point = event.data.point;
                 const radius = event.data.radius || null;

@@ -937,12 +937,30 @@
                     populateColormapSelector();
                     populateFieldSelector();
 
-                    // Restore selected field from parent widget state
+                    // Restore colormap from parent widget state
+                    const selectedColormap = data.selectedColormap || "";
+                    if (selectedColormap) {
+                        const colormapSel = document.getElementById('colormapSelector');
+                        if (colormapSel && Array.from(colormapSel.options).some(o => o.value === selectedColormap)) {
+                            colormapSel.value = selectedColormap;
+                        }
+                    }
+
+                    // Restore selected field, channel from parent widget state
                     const selectedField = data.selectedField || "";
                     if (selectedField) {
                         const fieldSel = document.getElementById('fieldSelector');
                         if (fieldSel && Array.from(fieldSel.options).some(o => o.value === selectedField)) {
                             fieldSel.value = selectedField;
+                            updateChannelSelector();
+                            // Restore channel
+                            const selectedChannel = data.selectedChannel || "";
+                            if (selectedChannel) {
+                                const channelSel = document.getElementById('channelSelector');
+                                if (channelSel && Array.from(channelSel.options).some(o => o.value === selectedChannel)) {
+                                    channelSel.value = selectedChannel;
+                                }
+                            }
                             applyFieldToAllViewports(selectedField);
                         }
                     }
@@ -1045,6 +1063,11 @@
             if (currentField && currentField !== 'none') {
                 applyFieldToAllViewports(currentField);
             }
+            window.parent.postMessage({
+                type: 'WIDGET_UPDATE',
+                widget: 'selected_channel',
+                value: document.getElementById('channelSelector').value
+            }, '*');
         });
 
         // Colormap selector change
@@ -1053,6 +1076,11 @@
             if (currentField && currentField !== 'none') {
                 applyFieldToAllViewports(currentField);
             }
+            window.parent.postMessage({
+                type: 'WIDGET_UPDATE',
+                widget: 'selected_colormap',
+                value: document.getElementById('colormapSelector').value
+            }, '*');
         });
 
         // Settings panel handlers

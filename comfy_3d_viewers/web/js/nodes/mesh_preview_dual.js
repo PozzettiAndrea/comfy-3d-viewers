@@ -20,7 +20,7 @@ app.registerExtension({
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
 
                 // Viewer state persisted via DOM widget serialization
-                const viewerState = { show_edges: false, camera_state: "", selected_field: "" };
+                const viewerState = { show_edges: false, camera_state: "", selected_field: "", selected_channel: "magnitude", selected_colormap: "erdc_rainbow_bright" };
 
                 // Create container for viewer + info panel
                 const container = createContainer();
@@ -135,6 +135,8 @@ app.registerExtension({
                             showEdges: viewerState.show_edges,
                             cameraState: viewerState.camera_state,
                             selectedField: viewerState.selected_field,
+                            selectedChannel: viewerState.selected_channel,
+                            selectedColormap: viewerState.selected_colormap,
                         });
 
                     } else {
@@ -170,6 +172,8 @@ app.registerExtension({
                             showEdges: viewerState.show_edges,
                             cameraState: viewerState.camera_state,
                             selectedField: viewerState.selected_field,
+                            selectedChannel: viewerState.selected_channel,
+                            selectedColormap: viewerState.selected_colormap,
                         });
                     }
 

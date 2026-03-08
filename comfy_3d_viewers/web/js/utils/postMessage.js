@@ -47,6 +47,8 @@ export function createLoadDualMeshMessage(options) {
         showEdges = false,
         cameraState = "",
         selectedField = "",
+        selectedChannel = "magnitude",
+        selectedColormap = "erdc_rainbow_bright",
     } = options;
 
     return {
@@ -60,6 +62,8 @@ export function createLoadDualMeshMessage(options) {
         showEdges,
         cameraState,
         selectedField,
+        selectedChannel,
+        selectedColormap,
         timestamp: Date.now()
     };
 }

@@ -1049,6 +1049,15 @@
                     populateColormapSelector();
                     populateFieldSelectors();
 
+                    // Restore colormap from parent widget state
+                    const selectedColormap = data.selectedColormap || "";
+                    if (selectedColormap) {
+                        const colormapSel = document.getElementById('colormapSelector');
+                        if (colormapSel && Array.from(colormapSel.options).some(o => o.value === selectedColormap)) {
+                            colormapSel.value = selectedColormap;
+                        }
+                    }
+
                     // Restore selected field from parent widget state
                     const selectedField = data.selectedField || "";
                     if (selectedField) {
@@ -1333,6 +1342,11 @@
         });
 
         document.getElementById('colormapSelector')?.addEventListener('change', () => {
+            window.parent.postMessage({
+                type: 'WIDGET_UPDATE',
+                widget: 'selected_colormap',
+                value: document.getElementById('colormapSelector').value
+            }, '*');
             // Reapply current field selections with new colormap
             const fieldMode = document.getElementById('fieldMode').value;
 
