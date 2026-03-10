@@ -16,8 +16,41 @@ const SETTINGS_KEYS = ['edge_visibility', 'outline_visibility', 'grid_visibility
 app.registerExtension({
     name: "pyvista.preview",
 
+    async setup() {
+        // Register yellow color for PYVISTA type links and slots.
+        // ComfyUI's palette system overwrites link_type_colors on theme load,
+        // so we use Object.defineProperty to make our color sticky.
+        const PYVISTA_COLOR = "#e5c100";
+        const PLOTTER_COLOR = "#d4a017";
+        function lockColor(obj) {
+            if (!obj) return;
+            for (const [type, color] of [["PYVISTA", PYVISTA_COLOR], ["PV_PLOTTER", PLOTTER_COLOR]]) {
+                Object.defineProperty(obj, type, {
+                    get() { return color; },
+                    set() {},
+                    configurable: true,
+                    enumerable: true,
+                });
+            }
+        }
+        function registerColor() {
+            if (app.canvas?.constructor?.link_type_colors) {
+                lockColor(app.canvas.constructor.link_type_colors);
+            }
+            if (window.LGraphCanvas?.link_type_colors) {
+                lockColor(window.LGraphCanvas.link_type_colors);
+            }
+            if (app.canvas?.default_connection_color_byType) {
+                lockColor(app.canvas.default_connection_color_byType);
+            }
+        }
+        registerColor();
+        setTimeout(registerColor, 500);
+        setTimeout(registerColor, 2000);
+    },
+
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
-        if (nodeData.name === "PyVistaPreview") {
+        if (nodeData.name === "PyVistaPreview" || nodeData.name === "PyVistaPreviewPlotter") {
 
             const onNodeCreated = nodeType.prototype.onNodeCreated;
             nodeType.prototype.onNodeCreated = function() {

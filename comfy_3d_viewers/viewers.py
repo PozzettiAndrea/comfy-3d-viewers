@@ -132,6 +132,10 @@ VIEWER_FILES = {
         "utils": True,
         "viewer_modules": True,
     },
+    "pyvista_text_report": {
+        "widget": ("pyvista_text_report.js", "js/"),
+        "utils": True,
+    },
 
     # --- CAD viewers ---
     "cad_analysis": {
