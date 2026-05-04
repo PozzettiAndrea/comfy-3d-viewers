@@ -34,7 +34,7 @@ function createCurvePlotterWidget(node, nodeType) {
         // Prevent blurriness from CSS transforms
         iframe.style.transform = "translateZ(0)";
         iframe.style.imageRendering = "pixelated";
-        iframe.src = new URL(`../../viewer_cad_curve.html?v=${Date.now()}`, import.meta.url).href;
+        iframe.src = new URL(`../viewer_cad_curve.html?v=${Date.now()}`, import.meta.url).href;
 
         container.appendChild(iframe);
 

@@ -22,7 +22,7 @@ app.registerExtension({
 
                 // Create iframe for VTK.js viewer (using analysis viewer which loads VTP)
                 const iframe = document.createElement("iframe");
-                iframe.src = new URL(`../../viewer_cad_analysis.html?v=${Date.now()}`, import.meta.url).href;
+                iframe.src = new URL(`../viewer_cad_analysis.html?v=${Date.now()}`, import.meta.url).href;
                 iframe.style.width = "100%";
                 iframe.style.flex = "1 1 0";
                 iframe.style.minHeight = "0";

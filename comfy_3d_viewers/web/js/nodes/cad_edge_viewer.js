@@ -31,7 +31,7 @@ function createEdgeViewerWidget(node, nodeType) {
         iframe.style.minHeight = "0";
         iframe.style.border = "none";
         iframe.style.backgroundColor = "#1a1a1a";
-        iframe.src = new URL(`../../viewer_cad_edge.html?v=${Date.now()}`, import.meta.url).href;
+        iframe.src = new URL(`../viewer_cad_edge.html?v=${Date.now()}`, import.meta.url).href;
 
         container.appendChild(iframe);
 
