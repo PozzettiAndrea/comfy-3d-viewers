@@ -218,9 +218,10 @@
 
     <!-- Load OpenCascade.js as ES module (bundled locally - v1.1.1) -->
     <script type="module">
-        import opencascadeInit from '/extensions/ComfyUI-CADabra/.libs/opencascade/opencascade.wasm.js';
+        import opencascadeInit from './.libs/opencascade/opencascade.wasm.js';
 
-        console.log('[OCC] Loading OpenCascade.js from local bundle: /extensions/ComfyUI-CADabra/.libs/opencascade/');
+        const OCC_LIBS_BASE = new URL('./.libs/opencascade/', document.baseURI).pathname;
+        console.log('[OCC] Loading OpenCascade.js from local bundle: ' + OCC_LIBS_BASE);
 
         let scene, camera, renderer, controls;
         let currentMesh = null;
@@ -372,7 +373,7 @@
                 oc = await opencascadeInit({
                     locateFile: (path) => {
                         if (path.endsWith('.wasm')) {
-                            return '/extensions/ComfyUI-CADabra/.libs/opencascade/' + path;
+                            return OCC_LIBS_BASE + path;
                         }
                         return path;
                     }

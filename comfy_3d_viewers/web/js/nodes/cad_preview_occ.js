@@ -21,7 +21,7 @@ app.registerExtension({
 
                 // Create iframe for VTK.js viewer (using analysis viewer which loads VTP)
                 const iframe = document.createElement("iframe");
-                iframe.src = "/extensions/ComfyUI-CADabra/viewer_cad_analysis.html?v=" + Date.now();
+                iframe.src = new URL(`../../viewer_cad_analysis.html?v=${Date.now()}`, import.meta.url).href;
                 iframe.style.width = "100%";
                 iframe.style.height = "500px";
                 iframe.style.border = "1px solid #333";

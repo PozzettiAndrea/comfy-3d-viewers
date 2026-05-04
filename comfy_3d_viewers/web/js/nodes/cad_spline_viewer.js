@@ -31,7 +31,7 @@ function createSplineViewerWidget(node, nodeType) {
         iframe.style.minHeight = "0";
         iframe.style.border = "none";
         iframe.style.backgroundColor = "#1a1a1a";
-        iframe.src = "/extensions/ComfyUI-CADabra/viewer_cad_spline.html?v=" + Date.now();
+        iframe.src = new URL(`../../viewer_cad_spline.html?v=${Date.now()}`, import.meta.url).href;
 
         container.appendChild(iframe);
 
