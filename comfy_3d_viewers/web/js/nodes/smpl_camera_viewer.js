@@ -1,6 +1,6 @@
 /**
  * SMPL Camera Viewer Widget - Renders SMPL mesh from estimated camera trajectory
- * with optional side-by-side reference video.
+ * with optional reference video stacked above.
  * Uses Three.js via iframe with trajectory/exterior camera toggle.
  */
 
@@ -68,14 +68,14 @@ function createSMPLCameraViewerExtension(config) {
                 const container = document.createElement("div");
                 container.style.cssText = "position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; background: #222;";
 
-                // Split view container (flexbox row)
+                // Split view container (flexbox column -- video stacked above 3D viewer)
                 const splitView = document.createElement("div");
-                splitView.style.cssText = "display: flex; flex-direction: row; width: 100%; flex: 1; min-height: 0;";
+                splitView.style.cssText = "display: flex; flex-direction: column; width: 100%; flex: 1; min-height: 0;";
                 container.appendChild(splitView);
 
-                // Left panel: reference video (hidden by default)
+                // Top panel: reference video (hidden by default)
                 const videoPanel = document.createElement("div");
-                videoPanel.style.cssText = "display: none; flex: 1; position: relative; background: #111; overflow: hidden;";
+                videoPanel.style.cssText = "display: none; flex: 1; min-height: 0; position: relative; background: #111; overflow: hidden;";
                 splitView.appendChild(videoPanel);
 
                 const videoElement = document.createElement("video");
@@ -91,9 +91,9 @@ function createSMPLCameraViewerExtension(config) {
                 refLabel.style.cssText = "position: absolute; top: 8px; left: 8px; color: rgba(255,255,255,0.5); font-size: 11px; font-family: monospace; background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 3px; pointer-events: none;";
                 videoPanel.appendChild(refLabel);
 
-                // Right panel: Three.js iframe
+                // Bottom panel: Three.js iframe
                 const iframePanel = document.createElement("div");
-                iframePanel.style.cssText = "flex: 1; position: relative; overflow: hidden;";
+                iframePanel.style.cssText = "flex: 1; min-height: 0; position: relative; overflow: hidden;";
                 splitView.appendChild(iframePanel);
 
                 const iframe = document.createElement("iframe");
