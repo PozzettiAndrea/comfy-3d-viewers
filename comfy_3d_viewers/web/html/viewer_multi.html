@@ -318,6 +318,53 @@
         const viewerContainer = document.getElementById('viewerContainer');
         const loading = document.getElementById('loading');
 
+        // --- mesh download progress bar (aggregate across parallel loads) ---
+        let _dlBar, _dlFill, _dl = {};
+        function _ensureDlBar() {
+            if (_dlBar) return;
+            _dlBar = document.createElement('div');
+            _dlBar.style.cssText = 'position:absolute;bottom:12px;left:50%;transform:translateX(-50%);' +
+                'width:220px;height:8px;background:rgba(255,255,255,0.2);border-radius:4px;overflow:hidden;' +
+                'z-index:1001;display:none;';
+            _dlFill = document.createElement('div');
+            _dlFill.style.cssText = 'width:0%;height:100%;background:#00c8ff;transition:width .1s linear;';
+            _dlBar.appendChild(_dlFill);
+            document.body.appendChild(_dlBar);
+        }
+        function setDownloadBar(frac) {
+            _ensureDlBar();
+            if (frac == null || isNaN(frac)) { _dlBar.style.display = 'none'; return; }
+            _dlBar.style.display = 'block';
+            _dlFill.style.width = Math.max(0, Math.min(100, Math.round(frac * 100))) + '%';
+        }
+        function _dlReset() { _dl = {}; }
+        function _dlUpdate(key, loaded, total) {
+            _dl[key] = { loaded: loaded || 0, total: total || 0 };
+            let L = 0, T = 0;
+            for (const k in _dl) { L += _dl[k].loaded; T += _dl[k].total; }
+            if (T > 0) {
+                const f = Math.min(1, L / T);
+                setDownloadBar(f);
+                if (loading) loading.textContent = `Loading meshes… ${Math.round(f * 100)}%`;
+            }
+        }
+        async function fetchWithProgress(url, key) {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+            const total = Number(resp.headers.get('Content-Length')) || 0;
+            if (!resp.body || !total) { if (total) _dlUpdate(key, total, total); return resp.arrayBuffer(); }
+            const reader = resp.body.getReader();
+            const chunks = []; let loaded = 0; _dlUpdate(key, 0, total);
+            for (;;) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value); loaded += value.length; _dlUpdate(key, loaded, total);
+            }
+            const out = new Uint8Array(loaded); let off = 0;
+            for (const c of chunks) { out.set(c, off); off += c.length; }
+            return out.buffer;
+        }
+
         // Viewer state
         let viewports = [];  // Array of {container, fullScreenRenderer, renderer, renderWindow, interactor, actor, mapper, polydata, bounds, fieldNames}
         let combinedBounds = null;
@@ -783,12 +830,7 @@
                     throw new Error(`Unsupported file format: ${filepath}`);
                 }
 
-                const response = await fetch(filepath);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const arrayBuffer = await response.arrayBuffer();
+                const arrayBuffer = await fetchWithProgress(filepath, viewportIndex);
 
                 if (isGLB) {
                     reader.parseAsArrayBuffer(arrayBuffer);
@@ -906,6 +948,7 @@
 
                 loading.textContent = 'Loading meshes...';
                 loading.style.display = 'block';
+                _dlReset();
 
                 try {
                     // Create viewport containers
@@ -974,12 +1017,14 @@
                     document.getElementById('showEdges').checked = showEdges;
 
                     loading.style.display = 'none';
+                    setDownloadBar(null);
                     console.log('[GeomPack VTK Multi Viewer] All meshes Loaded successfully');
 
                 } catch (error) {
                     console.error('[GeomPack VTK Multi Viewer] Error loading meshes:', error);
                     loading.textContent = `Error: ${error.message}`;
                     loading.style.color = '#ff6b6b';
+                    setDownloadBar(null);
                 }
             }
         });

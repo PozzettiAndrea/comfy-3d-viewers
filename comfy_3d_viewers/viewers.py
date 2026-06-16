@@ -43,6 +43,17 @@ VIEWER_FILES = {
         "utils": True,
         "viewer_modules": True,
     },
+    "slicer": {
+        "html": ("viewer_slicer.html", ""),
+        "bundles": [("vtk-gltf.js", "js/")],
+    },
+    "ultimate_inspection": {
+        "html": ("viewer_vtk.html", ""),
+        "bundles": [("vtk-gltf.js", "js/"), ("viewer-bundle-vtk.js", "js/")],
+        "widget": ("ultimate_mesh_inspection.js", "js/"),
+        "utils": True,
+        "viewer_modules": True,
+    },
     "vtk_batch": {
         "html": ("viewer_vtk.html", ""),
         "bundles": [("vtk-gltf.js", "js/"), ("viewer-bundle-vtk.js", "js/")],

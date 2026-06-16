@@ -244,9 +244,34 @@ export class BaseViewer {
         overlay.innerHTML = `
             <div class="spinner"></div>
             <div class="loading-text">Loading mesh...</div>
+            <div class="loading-progress" style="display:none;width:140px;height:6px;margin-top:8px;
+                 background:rgba(255,255,255,0.18);border-radius:3px;overflow:hidden;">
+                <div class="loading-progress-bar" style="width:0%;height:100%;
+                     background:#00c8ff;transition:width 0.1s linear;"></div>
+            </div>
         `;
         this.container.parentElement.appendChild(overlay);
         return overlay;
+    }
+
+    /**
+     * Update the download progress bar.
+     * @param {number|null} fraction - 0..1, or null for indeterminate (hides the bar)
+     */
+    setProgress(fraction) {
+        if (!this.loadingOverlay) return;
+        const wrap = this.loadingOverlay.querySelector('.loading-progress');
+        const bar = this.loadingOverlay.querySelector('.loading-progress-bar');
+        const textEl = this.loadingOverlay.querySelector('.loading-text');
+        if (!wrap || !bar) return;
+        if (fraction == null || isNaN(fraction)) {
+            wrap.style.display = 'none';        // indeterminate -> spinner only
+            return;
+        }
+        const pct = Math.max(0, Math.min(100, Math.round(fraction * 100)));
+        wrap.style.display = 'block';
+        bar.style.width = pct + '%';
+        if (textEl) textEl.textContent = `Downloading mesh… ${pct}%`;
     }
 
     /**
@@ -347,15 +372,17 @@ export class BaseViewer {
      * @returns {Promise<Object>} Load result with polyData, actors, fields
      */
     async loadMesh(url) {
-        this.showLoading(true);
+        this.showLoading(true, 'Downloading mesh…');
+        this.setProgress(0);
 
         try {
             // Clear existing actors
             this.clearScene();
 
-            // Detect format and load
+            // Detect format and load (with download progress)
             const result = await loadMesh(url, this.vtk, {
-                renderer: this.renderer
+                renderer: this.renderer,
+                onProgress: (frac) => this.setProgress(frac)
             });
 
             // Store state
@@ -538,6 +565,13 @@ export class BaseViewer {
             const textEl = this.loadingOverlay.querySelector('.loading-text');
             if (textEl) {
                 textEl.textContent = text;
+            }
+            if (!show) {
+                // reset the progress bar for the next load
+                const wrap = this.loadingOverlay.querySelector('.loading-progress');
+                const bar = this.loadingOverlay.querySelector('.loading-progress-bar');
+                if (wrap) wrap.style.display = 'none';
+                if (bar) bar.style.width = '0%';
             }
         }
     }

@@ -349,6 +349,74 @@
         console.log('[GeomPack VTK Dual Viewer] Initializing...');
 
         const loading = document.getElementById('loading');
+
+        // --- mesh download progress bar (aggregate across loads) ---
+        let _dlBar, _dlFill, _dl = {};
+        function _ensureDlBar() {
+            if (_dlBar) return;
+            const kf = document.createElement('style');
+            kf.textContent = '@keyframes gpDlIndet{0%{left:-40%}100%{left:100%}}';
+            document.head.appendChild(kf);
+            _dlBar = document.createElement('div');
+            _dlBar.style.cssText = 'position:absolute;bottom:12px;left:50%;transform:translateX(-50%);' +
+                'width:220px;height:8px;background:rgba(255,255,255,0.2);border-radius:4px;overflow:hidden;' +
+                'z-index:1001;display:none;';
+            _dlFill = document.createElement('div');
+            _dlFill.style.cssText = 'width:0%;height:100%;background:#00c8ff;transition:width .1s linear;';
+            _dlBar.appendChild(_dlFill);
+            document.body.appendChild(_dlBar);
+        }
+        // Determinate fill (0..1), or null to hide.
+        function setDownloadBar(frac) {
+            _ensureDlBar();
+            if (frac == null || isNaN(frac)) { _dlBar.style.display = 'none'; return; }
+            _dlBar.style.display = 'block';
+            _dlFill.style.animation = 'none';
+            _dlFill.style.position = 'static';
+            _dlFill.style.left = '';
+            _dlFill.style.transition = 'width .1s linear';
+            _dlFill.style.width = Math.max(0, Math.min(100, Math.round(frac * 100))) + '%';
+        }
+        // Indeterminate animated bar -- shown while a load is in flight but the
+        // total size is unknown (no Content-Length) or before headers arrive, so
+        // there is ALWAYS a visible indicator during loading.
+        function setDownloadIndeterminate() {
+            _ensureDlBar();
+            _dlBar.style.display = 'block';
+            _dlFill.style.transition = 'none';
+            _dlFill.style.position = 'absolute';
+            _dlFill.style.width = '40%';
+            _dlFill.style.left = '-40%';
+            _dlFill.style.animation = 'gpDlIndet 1.1s linear infinite';
+        }
+        function _dlReset() { _dl = {}; }
+        function _dlUpdate(key, loaded, total) {
+            _dl[key] = { loaded: loaded || 0, total: total || 0 };
+            let L = 0, T = 0;
+            for (const k in _dl) { L += _dl[k].loaded; T += _dl[k].total; }
+            if (T > 0) {
+                const f = Math.min(1, L / T);
+                setDownloadBar(f);
+                if (loading) loading.textContent = `Loading meshes… ${Math.round(f * 100)}%`;
+            }
+        }
+        async function fetchWithProgress(url, key) {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+            const total = Number(resp.headers.get('Content-Length')) || 0;
+            if (!resp.body || !total) { setDownloadIndeterminate(); const _b = await resp.arrayBuffer(); if (total) _dlUpdate(key, total, total); return _b; }
+            const reader = resp.body.getReader();
+            const chunks = []; let loaded = 0; _dlUpdate(key, 0, total);
+            for (;;) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value); loaded += value.length; _dlUpdate(key, loaded, total);
+            }
+            const out = new Uint8Array(loaded); let off = 0;
+            for (const c of chunks) { out.set(c, off); off += c.length; }
+            return out.buffer;
+        }
+
         const sideBySideContainer = document.getElementById('sideBySideContainer');
         const overlayContainer = document.getElementById('overlayContainer');
 
@@ -642,12 +710,12 @@
                     throw new Error(`Unsupported file format: ${filepath}`);
                 }
 
-                const response = await fetch(filepath);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
+                const arrayBuffer = await fetchWithProgress(filepath, filepath);
 
-                const arrayBuffer = await response.arrayBuffer();
+                // Yield once so the progress bar actually paints before the
+                // synchronous VTK parse/upload below blocks the main thread.
+                if (loading) loading.textContent = `Processing mesh ${isMesh1 ? '1' : '2'}…`;
+                await new Promise(r => setTimeout(r, 0));
 
                 if (isGLB) {
                     // GLB handling for overlay mode
@@ -974,6 +1042,8 @@
 
                 loading.textContent = 'Loading meshes...';
                 loading.style.display = 'block';
+                _dlReset();
+                setDownloadIndeterminate();
 
                 try {
                     if (viewerLayout === 'side_by_side') {
@@ -1135,12 +1205,14 @@
                     isInitialized = true;
 
                     loading.style.display = 'none';
+                    setDownloadBar(null);
                     console.log('[GeomPack VTK Dual Viewer] Meshes Loaded successfully');
 
                 } catch (error) {
                     console.error('[GeomPack VTK Dual Viewer] Error loading meshes:', error);
                     loading.textContent = `Error: ${error.message}`;
                     loading.style.color = '#ff6b6b';
+                    setDownloadBar(null);
                 }
             }
         });

@@ -13,6 +13,8 @@ const TEXT_REPORT_NODES = [
     "GeomPackDegenerateFaces",
     "GeomPackConnectedComponents",
     "GeomPackOpenEdges",
+    "GeomPackComputeCurvature",
+    "GeomPackComputeFilletField",
     // Repair
     "GeomPackFillHoles",
     "GeomPackMeshFix",
@@ -26,6 +28,10 @@ const TEXT_REPORT_NODES = [
     "GeomPackDetectSelfIntersections",
     "GeomPackFixSelfIntersectionsByPerturbation",
     "GeomPackRemeshSelfIntersections",
+    // Smoothing / Decimation (unified dispatcher front nodes — info forwarded
+    // from the hidden backend via the executed event's display_node)
+    "GeomPackSharpenMesh",
+    "GeomPackDecimateMesh",
     // Remeshing
     "GeomPackRemesh",
     "GeomPackRemeshCGAL",

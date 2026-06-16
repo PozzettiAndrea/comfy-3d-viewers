@@ -70,12 +70,32 @@ export function supportsFields(format) {
  * @param {string} filepath - URL to fetch
  * @returns {Promise<ArrayBuffer>}
  */
-async function fetchFile(filepath) {
+async function fetchFile(filepath, onProgress = null) {
     const response = await fetch(filepath);
     if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    return response.arrayBuffer();
+    const total = Number(response.headers.get('Content-Length')) || 0;
+    // Fall back to a plain (indeterminate) read if we can't stream or size it.
+    if (!response.body || !total || typeof onProgress !== 'function') {
+        if (typeof onProgress === 'function') onProgress(null);
+        return response.arrayBuffer();
+    }
+    const reader = response.body.getReader();
+    const chunks = [];
+    let loaded = 0;
+    onProgress(0, 0, total);
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.length;
+        onProgress(Math.min(1, loaded / total), loaded, total);
+    }
+    const out = new Uint8Array(loaded);
+    let offset = 0;
+    for (const c of chunks) { out.set(c, offset); offset += c.length; }
+    return out.buffer;
 }
 
 /**
@@ -92,7 +112,8 @@ export async function loadMesh(filepath, vtk, options = {}) {
     const {
         renderer = null,
         withTextures = true,
-        twoSidedLighting = true
+        twoSidedLighting = true,
+        onProgress = null
     } = options;
 
     const format = detectFormat(filepath);
@@ -104,15 +125,17 @@ export async function loadMesh(filepath, vtk, options = {}) {
     console.log(`[LoaderFactory] Loading ${format} file:`, filepath);
 
     // GLTF/GLB with texture support requires renderer and URL-based loading
+    // (VTK fetches internally, so we can't byte-track it -> indeterminate).
     if ((format === FormatTypes.GLTF || format === FormatTypes.GLB) && withTextures && renderer) {
+        if (typeof onProgress === 'function') onProgress(null);
         return loadGLTF(filepath, vtk, renderer, {
             applyTextureFixes: true,
             twoSidedLighting
         });
     }
 
-    // For all other cases, fetch the file first
-    const arrayBuffer = await fetchFile(filepath);
+    // For all other cases, fetch the file first (with download progress)
+    const arrayBuffer = await fetchFile(filepath, onProgress);
 
     switch (format) {
         case FormatTypes.STL:
