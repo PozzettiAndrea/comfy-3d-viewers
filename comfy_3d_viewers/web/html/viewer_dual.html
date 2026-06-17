@@ -274,6 +274,17 @@
                 <label>Preset:</label>
                 <select id="colormapSelector" style="width: 140px;"></select>
             </div>
+            <div class="setting-row">
+                <label><input type="checkbox" id="autoColorRange" checked> Auto Range</label>
+            </div>
+            <div class="setting-row">
+                <label>Min:</label>
+                <input type="number" id="colormapMin" step="any" placeholder="Auto" style="width: 120px;" disabled>
+            </div>
+            <div class="setting-row">
+                <label>Max:</label>
+                <input type="number" id="colormapMax" step="any" placeholder="Auto" style="width: 120px;" disabled>
+            </div>
             <div class="button-row">
                 <button id="applySettings">Apply</button>
                 <button id="cancelSettings">Cancel</button>
@@ -326,6 +337,15 @@
             <label id="sharedFieldLabel" style="display:none;">
                 Field:
                 <select id="sharedFieldSelector"></select>
+            </label>
+            <label id="channelLabel" style="display:none;">
+                Channel:
+                <select id="channelSelector">
+                    <option value="magnitude">Magnitude</option>
+                    <option value="0">X</option>
+                    <option value="1">Y</option>
+                    <option value="2">Z</option>
+                </select>
             </label>
         </div>
     </div>
@@ -873,11 +893,46 @@
             const actualFieldName = isCellData ? fieldName.substring(5) : fieldName;
 
             const data = isCellData ? polydata.getCellData() : polydata.getPointData();
-            const scalarArray = data.getArrayByName(actualFieldName);
+            let scalarName = actualFieldName;
+            let scalarArray = data.getArrayByName(actualFieldName);
+
+            // X/Y/Z channel for multi-component fields (e.g. normals): extract the
+            // chosen component into a temp scalar array and colour by that.
+            const channel = document.getElementById('channelSelector')?.value || 'magnitude';
+            const channelActive = scalarArray && scalarArray.getNumberOfComponents() > 1 && channel !== 'magnitude';
+            if (channelActive) {
+                const comp = parseInt(channel);
+                const nc = scalarArray.getNumberOfComponents();
+                const nt = scalarArray.getNumberOfTuples();
+                const src = scalarArray.getData();
+                const out = new Float32Array(nt);
+                for (let i = 0; i < nt; i++) out[i] = src[i * nc + comp];
+                scalarName = actualFieldName + '__c' + comp;
+                const vtkDataArray = vtk.Common.Core.vtkDataArray;
+                if (data.getArrayByName(scalarName)) data.removeArrayByName(scalarName);
+                data.addArray(vtkDataArray.newInstance({ name: scalarName, numberOfComponents: 1, values: out }));
+                scalarArray = data.getArrayByName(scalarName);
+            }
 
             if (scalarArray) {
-                const range = scalarArray.getRange();
-                const [min, max] = sharedRange || range;
+                const dataRange = scalarArray.getRange();
+                // Manual colormap range (settings) overrides everything when Auto is off.
+                const autoRange = document.getElementById('autoColorRange')?.checked !== false;
+                let min, max;
+                if (!autoRange) {
+                    const mn = parseFloat(document.getElementById('colormapMin')?.value);
+                    const mx = parseFloat(document.getElementById('colormapMax')?.value);
+                    if (!isNaN(mn) && !isNaN(mx)) { min = mn; max = mx; }
+                }
+                if (min === undefined) {
+                    // a per-component channel auto-ranges itself (the shared magnitude
+                    // range wouldn't match), otherwise honour the synchronized range.
+                    [min, max] = (channelActive || !sharedRange) ? dataRange : sharedRange;
+                    // reflect the active auto range in the (disabled) Min/Max inputs
+                    const mnEl = document.getElementById('colormapMin');
+                    const mxEl = document.getElementById('colormapMax');
+                    if (autoRange && mnEl && mxEl) { mnEl.value = (+min).toFixed(3); mxEl.value = (+max).toFixed(3); }
+                }
 
                 // Check for degenerate range - if shared range provided (synchronized mode), don't disable
                 const epsilon = 1e-10;
@@ -889,7 +944,7 @@
                     return;
                 }
 
-                data.setActiveScalars(actualFieldName);
+                data.setActiveScalars(scalarName);
                 mapper.setScalarVisibility(true);
 
                 if (isCellData) {
@@ -1027,6 +1082,8 @@
             // Show field controls if fields exist
             if (fieldNames1.length > 0 || fieldNames2.length > 0) {
                 document.getElementById('fieldControls').classList.add('active');
+                const _cl = document.getElementById('channelLabel');
+                if (_cl) _cl.style.display = 'flex';
                 updateFieldModeUI();
             }
         }
@@ -1312,6 +1369,9 @@
                 singleRenderWindow.render();
             }
 
+            // Commit the colormap range (Min/Max/Auto) to the active field(s).
+            reapplyFields();
+
             // Update stored settings
             currentPointSize = newPointSize;
             currentMeshColor = newColor;
@@ -1413,13 +1473,8 @@
             }
         });
 
-        document.getElementById('colormapSelector')?.addEventListener('change', () => {
-            window.parent.postMessage({
-                type: 'WIDGET_UPDATE',
-                widget: 'selected_colormap',
-                value: document.getElementById('colormapSelector').value
-            }, '*');
-            // Reapply current field selections with new colormap
+        // Re-apply the current field selections (used by colormap + channel changes)
+        function reapplyFields() {
             const fieldMode = document.getElementById('fieldMode').value;
 
             if (fieldMode === 'independent') {
@@ -1459,6 +1514,31 @@
                     renderWithClippingRangeUpdate(rightRenderer, rightRenderWindow);
                 }
             }
+        }
+
+        document.getElementById('colormapSelector')?.addEventListener('change', () => {
+            window.parent.postMessage({
+                type: 'WIDGET_UPDATE',
+                widget: 'selected_colormap',
+                value: document.getElementById('colormapSelector').value
+            }, '*');
+            reapplyFields();
+        });
+
+        // X/Y/Z channel change -> re-colour by the chosen component
+        document.getElementById('channelSelector')?.addEventListener('change', reapplyFields);
+
+        // Manual colormap range controls
+        document.getElementById('autoColorRange')?.addEventListener('change', (e) => {
+            document.getElementById('colormapMin').disabled = e.target.checked;
+            document.getElementById('colormapMax').disabled = e.target.checked;
+            reapplyFields();
+        });
+        document.getElementById('colormapMin')?.addEventListener('change', () => {
+            if (!document.getElementById('autoColorRange').checked) reapplyFields();
+        });
+        document.getElementById('colormapMax')?.addEventListener('change', () => {
+            if (!document.getElementById('autoColorRange').checked) reapplyFields();
         });
 
         // Camera view buttons

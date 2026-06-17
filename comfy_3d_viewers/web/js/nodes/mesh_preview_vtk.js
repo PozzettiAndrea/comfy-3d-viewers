@@ -41,15 +41,19 @@ app.registerExtension({
                     getValue() { return JSON.stringify(viewerState); },
                     setValue(v) {
                         try { Object.assign(viewerState, JSON.parse(v)); } catch(e) {}
-                    }
+                    },
+                    // Low constant minimum: the DOM widget fills the node's height and
+                    // the node resizes freely down to ~120px. A CONSTANT can't feed back
+                    // the way a node.size-derived computeSize did (which grew forever),
+                    // so do NOT re-add a computeSize override here.
+                    getMinHeight: () => 120,
                 });
-                widget.computeSize = () => [512, 640];
 
                 // Store references
                 this.meshViewerIframeVTK = iframe;
                 this.meshInfoPanelVTK = infoPanel;
 
-                this.setSize(this.computeSize());
+                this.setSize([512, 640]);
 
                 // Bidirectional sync: viewer → node widgets (viewerState + real widgets)
                 const node = this;
@@ -59,6 +63,9 @@ app.registerExtension({
                         if (name in viewerState) viewerState[name] = value;
                         const w = node.widgets?.find(w => w.name === name);
                         if (w) w.value = value;
+                    } else if (event.data.type === 'TOGGLE_INFO' && event.source === iframe.contentWindow) {
+                        // viewer's minimise arrow also hides/shows this node's info panel
+                        infoPanel.style.display = event.data.collapsed ? 'none' : '';
                     }
                 });
 
