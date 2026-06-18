@@ -81,6 +81,11 @@ VIEWER_FILES = {
         "widget": ("mesh_preview_multi.js", "js/"),
         "utils": True,
     },
+    "multi_slider": {
+        "html": ("viewer_multi_slider.html", ""),
+        "bundles": [("vtk-gltf.js", "js/"), ("viewer-bundle-vtk.js", "js/")],
+        "utils": True,
+    },
     "dual": {
         "html": ("viewer_dual.html", ""),
         "bundle": ("vtk-gltf.js", "js/"),

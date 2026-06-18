@@ -7,6 +7,8 @@ import { app } from "../../../scripts/app.js";
 import { buildTextReportHTML } from "./utils/analysisPanel.js";
 
 const TEXT_REPORT_NODES = [
+    // CADabra
+    "CADUltimateInspection",
     // Analysis
     "GeomPackMeshInfo",
     "GeomPackMeshQuality",

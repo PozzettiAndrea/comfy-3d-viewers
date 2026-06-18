@@ -24,7 +24,8 @@ app.registerExtension({
                 const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
 
                 // Viewer state persisted via DOM widget serialization
-                const viewerState = { show_edges: false, camera_state: "", selected_field: "", selected_channel: "magnitude", selected_colormap: "erdc_rainbow_bright" };
+                const viewerState = { layout: "wipe", show_edges: false, camera_state: "", selected_field: "", selected_channel: "magnitude", selected_colormap: "erdc_rainbow_bright" };
+                const viewerUrl = () => (viewerState.layout === "overlay" ? "viewer_multi.html" : "viewer_multi_slider.html");
 
                 console.log('[GeomPack Multi JS] Creating PreviewMeshMulti node widget');
 
@@ -43,7 +44,16 @@ app.registerExtension({
                 iframe.style.minHeight = "450px";
                 iframe.style.border = "none";
                 iframe.style.backgroundColor = "#2a2a2a";
-                iframe.src = `/extensions/${EXTENSION_FOLDER}/viewer_multi.html?v=` + Date.now();
+                iframe.src = `/extensions/${EXTENSION_FOLDER}/${viewerUrl()}?v=` + Date.now();
+
+                // Layout toggle bar (Wipe = N-1 draggable dividers, fixed order; Overlay = stacked)
+                const bar = document.createElement("div");
+                bar.style.cssText = "background:#1a1a1a;border-bottom:1px solid #444;padding:4px 8px;display:flex;gap:8px;align-items:center;font:11px monospace;color:#ccc;flex-shrink:0;";
+                const layoutSel = document.createElement("select");
+                layoutSel.style.cssText = "background:#333;color:#ccc;border:1px solid #555;border-radius:3px;font:11px monospace;padding:2px 6px;";
+                layoutSel.innerHTML = '<option value="wipe">Wipe (sliders)</option><option value="overlay">Overlay</option>';
+                bar.appendChild(Object.assign(document.createElement("span"), { textContent: "Layout:" }));
+                bar.appendChild(layoutSel);
 
                 // Create mesh info panel
                 const infoPanel = document.createElement("div");
@@ -58,6 +68,7 @@ app.registerExtension({
                 infoPanel.style.overflow = "hidden";
                 infoPanel.innerHTML = '<span style="color: #888;">Mesh info will appear here after execution</span>';
 
+                container.appendChild(bar);
                 container.appendChild(iframe);
                 container.appendChild(infoPanel);
 
@@ -88,11 +99,31 @@ app.registerExtension({
                     }
                 });
 
-                // Track iframe load state
+                // Track iframe load state + last loaded meshes (so a layout switch re-sends)
                 let iframeLoaded = false;
-                iframe.addEventListener('load', () => {
-                    iframeLoaded = true;
-                    console.log('[GeomPack Multi] Iframe loaded');
+                let lastLoad = null;   // { numMeshes, filepaths }
+                const buildAndSend = () => {
+                    if (!lastLoad || !iframe.contentWindow) return;
+                    let msg;
+                    if (viewerState.layout === "overlay") {
+                        msg = { type: 'LOAD_MULTI_MESH', numMeshes: lastLoad.numMeshes, meshFiles: lastLoad.filepaths,
+                                timestamp: Date.now(), showEdges: viewerState.show_edges, cameraState: viewerState.camera_state,
+                                selectedField: viewerState.selected_field, selectedChannel: viewerState.selected_channel,
+                                selectedColormap: viewerState.selected_colormap };
+                    } else {
+                        msg = { type: 'LOAD_MULTI_SLIDER', mesh_files: lastLoad.filepaths, timestamp: Date.now(),
+                                show_edges: viewerState.show_edges, camera_state: viewerState.camera_state };
+                    }
+                    iframe.contentWindow.postMessage(msg, "*");
+                };
+                iframe.addEventListener('load', () => { iframeLoaded = true; buildAndSend(); });
+
+                // Layout switch: swap the viewer iframe; buildAndSend fires on its load
+                layoutSel.value = viewerState.layout;
+                layoutSel.addEventListener('change', () => {
+                    viewerState.layout = layoutSel.value;
+                    iframeLoaded = false;
+                    iframe.src = `/extensions/${EXTENSION_FOLDER}/${viewerUrl()}?v=` + Date.now();
                 });
 
                 // Set initial node size
@@ -116,51 +147,47 @@ app.registerExtension({
 
                     console.log(`[GeomPack Multi] onExecuted: ${numMeshes} meshes, grid ${gridCols}x${gridRows}`);
 
-                    // Build info panel HTML
-                    let infoHTML = `<div style="display: grid; grid-template-columns: auto repeat(${numMeshes}, 1fr); gap: 2px 12px;">`;
+                    // Per-mesh info, one column per mesh (matches the single Preview Mesh panel)
+                    const wt = message.is_watertight_list?.[0] || [];
+                    const avg = message.avg_edge_lengths?.[0] || [];
+                    const bnds = message.bounds_list?.[0] || [];
+                    const exts = message.extents_list?.[0] || [];
+                    const fields = message.field_names_list?.[0] || null;
+                    const num = (v) => (v == null ? '—' : Number(v).toLocaleString());
+                    const sig = (v) => (v == null ? '—' : Number(v).toLocaleString(undefined, { maximumSignificantDigits: 4 }));
+                    const ext = (e) => (e ? e.map((x) => Number(x).toFixed(2)).join(' × ') : '—');
+                    const bnd = (b) => (b
+                        ? `<span style="font-size:9px;color:#aaa;">[${b[0].map((x) => Number(x).toFixed(1)).join(', ')}]<br>→ [${b[1].map((x) => Number(x).toFixed(1)).join(', ')}]</span>`
+                        : '—');
+
+                    let infoHTML = `<div style="display: grid; grid-template-columns: auto repeat(${numMeshes}, 1fr); gap: 2px 12px; font: 11px monospace;">`;
                     infoHTML += `<span style="color: #888;"></span>`;
                     for (let i = 0; i < numMeshes; i++) {
                         infoHTML += `<span style="color: #999; font-weight: bold; border-bottom: 1px solid #333;">Mesh ${i + 1}</span>`;
                     }
-                    infoHTML += `<span style="color: #888;">Vertices:</span>`;
-                    for (let i = 0; i < numMeshes; i++) {
-                        infoHTML += `<span>${vertexCounts[i].toLocaleString()}</span>`;
-                    }
-                    infoHTML += `<span style="color: #888;">Faces:</span>`;
-                    for (let i = 0; i < numMeshes; i++) {
-                        infoHTML += `<span>${faceCounts[i].toLocaleString()}</span>`;
+                    const row = (label, valFn) => {
+                        infoHTML += `<span style="color: #888;">${label}</span>`;
+                        for (let i = 0; i < numMeshes; i++) infoHTML += `<span>${valFn(i)}</span>`;
+                    };
+                    row('Vertices:', (i) => num(vertexCounts[i]));
+                    row('Faces:', (i) => num(faceCounts[i]));
+                    row('Watertight:', (i) => { const w = wt[i]; return `<span style="color:${w ? '#7c7' : '#c77'};">${w ? 'Yes' : 'No'}</span>`; });
+                    row('Avg edge:', (i) => sig(avg[i]));
+                    row('Extents:', (i) => ext(exts[i]));
+                    row('Bounds:', (i) => bnd(bnds[i]));
+                    if (fields) {
+                        row('Fields:', (i) => {
+                            const f = fields[i] || [];
+                            return f.length ? `<span style="font-size:9px;color:#9bd;">${f.join(', ')}</span>` : '<span style="color:#666;">—</span>';
+                        });
                     }
                     infoHTML += '</div>';
                     infoPanel.innerHTML = infoHTML;
 
-                    // Prepare file paths
+                    // Prepare file paths + store for (re)send (also used when layout is switched)
                     const filepaths = meshFiles.map(f => `/view?filename=${encodeURIComponent(f)}&type=output&subfolder=`);
-
-                    const postMessageData = {
-                        type: 'LOAD_MULTI_MESH',
-                        numMeshes: numMeshes,
-                        meshFiles: filepaths,
-                        timestamp: Date.now(),
-                        showEdges: viewerState.show_edges,
-                        cameraState: viewerState.camera_state,
-                        selectedField: viewerState.selected_field,
-                        selectedChannel: viewerState.selected_channel,
-                        selectedColormap: viewerState.selected_colormap,
-                    };
-
-                    // Send message to iframe
-                    const sendMessage = () => {
-                        if (iframe.contentWindow) {
-                            console.log('[GeomPack Multi] Sending message to iframe:', postMessageData);
-                            iframe.contentWindow.postMessage(postMessageData, "*");
-                        }
-                    };
-
-                    if (iframeLoaded) {
-                        sendMessage();
-                    } else {
-                        iframe.addEventListener('load', sendMessage, { once: true });
-                    }
+                    lastLoad = { numMeshes, filepaths };
+                    buildAndSend();
                 };
 
                 return r;

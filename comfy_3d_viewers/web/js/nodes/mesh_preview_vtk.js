@@ -107,14 +107,29 @@ app.registerExtension({
                             boundsMin: message.bounds_min?.[0] || [],
                             boundsMax: message.bounds_max?.[0] || [],
                             extents: message.extents?.[0] || [],
+                            avgEdge: message.avg_edge_length?.[0],
                             isWatertight: message.is_watertight?.[0],
                             fieldNames: message.field_names?.[0] || [],
+                            fieldRanges: message.field_ranges?.[0] || [],
                             hasTexture: message.has_texture?.[0],
                             hasVertexColors: message.has_vertex_colors?.[0],
                             visualKind: message.visual_kind?.[0]
                         });
 
                         infoPanel.innerHTML = infoHTML;
+
+                        // Click a field's min/max value to fly the camera to that element.
+                        const minPos = message.field_min_pos?.[0] || [];
+                        const maxPos = message.field_max_pos?.[0] || [];
+                        infoPanel.querySelectorAll('.field-extreme').forEach((el) => {
+                            el.addEventListener('click', () => {
+                                const i = parseInt(el.dataset.fidx, 10);
+                                const pos = (el.dataset.which === 'min' ? minPos : maxPos)[i];
+                                if (pos && pos.length === 3) {
+                                    viewerManager.sendMessage({ type: 'FOCUS_ON_POINT', point: pos, timestamp: Date.now() });
+                                }
+                            });
+                        });
 
                         // Build file path and message
                         const filepath = buildViewUrl(filename);
