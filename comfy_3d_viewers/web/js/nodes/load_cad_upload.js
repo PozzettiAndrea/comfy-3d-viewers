@@ -2,8 +2,8 @@
 // Mirrors GeometryPack's load_mesh_upload.js, adapted for CAD files:
 //   - target node CAD_Load, combo widget "filename"
 //   - uploads to ComfyUI's /upload/image with subfolder=cad (lands in input/cad/)
-//   - the combo value is a BARE filename (CAD_Load reads input/cad/<filename>),
-//     so we strip the "cad/" subfolder the upload endpoint returns.
+//   - the combo value is the input-relative path "cad/<filename>" (matching
+//     CAD_Load's recursive scan); CAD_Load resolves it against the input folder.
 import { app } from "../../../scripts/app.js";
 
 const TAG = "[LoadCADUpload]";
@@ -13,8 +13,8 @@ const EXTS = [".step", ".stp", ".iges", ".igs", ".brep"];
 const ACCEPT = EXTS.join(",");
 const isCad = (name) => EXTS.some((x) => name.toLowerCase().endsWith(x));
 
-// XHR upload so we can report upload progress. Returns the BARE filename
-// (subfolder stripped) to match what CAD_Load / _get_cad_files expect.
+// XHR upload so we can report upload progress. Returns the input-relative path
+// "cad/<filename>" to match what CAD_Load / _get_cad_files list.
 function uploadCad(file, onProgress) {
     return new Promise((resolve, reject) => {
         const body = new FormData();
@@ -31,7 +31,8 @@ function uploadCad(file, onProgress) {
             if (xhr.status === 200) {
                 try {
                     const d = JSON.parse(xhr.responseText);
-                    resolve(d.name);   // bare filename; CAD_Load joins it onto input/cad/
+                    const sub = (d.subfolder || "").replace(/\\/g, "/");
+                    resolve(sub ? `${sub}/${d.name}` : d.name);  // e.g. "cad/foo.step"
                 } catch (e) { reject(e); }
             } else {
                 reject(new Error(`${xhr.status} ${xhr.responseText}`));
