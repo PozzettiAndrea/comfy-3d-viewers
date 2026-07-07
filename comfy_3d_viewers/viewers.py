@@ -139,6 +139,9 @@ VIEWER_FILES = {
         "widget": ("text_report.js", "js/"),
         "utils": True,
     },
+    "warp_mesh": {
+        "widget": ("warp_mesh_field_select.js", "js/"),
+    },
 
     # --- PyVista viewer ---
     "pyvista": {
@@ -158,6 +161,12 @@ VIEWER_FILES = {
         "html": ("viewer_cad_analysis.html", ""),
         "bundle": ("vtk-gltf.js", "js/"),
         "widget": ("cad_analysis_viewer.js", "js/"),
+        "utils": True,
+    },
+    "cad_dual": {
+        "html": ("viewer_cad_dual.html", ""),
+        "bundle": ("vtk-gltf.js", "js/"),
+        "widget": ("cad_preview_dual.js", "js/"),
         "utils": True,
     },
     "cad_curve": {
