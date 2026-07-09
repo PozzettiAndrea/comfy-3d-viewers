@@ -101,21 +101,37 @@ function createHierarchyViewerWidget(node, nodeType) {
         );
 
         widget.computeSize = function(width) {
-            return [width, 500];
+            return [width, 560];
         };
 
         // Store references
         this.hierarchyIframe = iframe;
         this.lastLoadedFile = null;
 
+        // Build a /view URL for a file in the output dir (mesh/edges VTPs live there too)
+        const viewUrl = (filename) => `/view?filename=${encodeURIComponent(filename)}&type=output&subfolder=`;
+
+        const sendLoadMessage = () => {
+            const state = this.lastHierarchyState;
+            if (!state || !iframe.contentWindow) return;
+            iframe.contentWindow.postMessage({
+                type: "LOAD_HIERARCHY",
+                jsonUrl: viewUrl(state.hierarchyFile),
+                meshUrl: state.meshFile ? viewUrl(state.meshFile) : null,
+                edgesUrl: state.edgesFile ? viewUrl(state.edgesFile) : null,
+                boundsMin: state.boundsMin,
+                boundsMax: state.boundsMax,
+                hierarchyFile: state.hierarchyFile,
+                nodeId: this.id,
+                timestamp: Date.now()
+            }, "*");
+        };
+
         // Handle execution results
         this.onExecuted = function(message) {
             if (!message) return;
 
             const hierarchyFile = message.hierarchy_file?.[0];
-            const numFaces = message.num_faces?.[0] || 0;
-            const numEdges = message.num_edges?.[0] || 0;
-            const numSolids = message.num_solids?.[0] || 0;
 
             if (!hierarchyFile) {
                 console.error("[CADabra] Missing hierarchy file from node");
@@ -128,46 +144,28 @@ function createHierarchyViewerWidget(node, nodeType) {
                 return;
             }
 
-            // Construct file URL for viewer
-            const jsonUrl = `/view?filename=${encodeURIComponent(hierarchyFile)}&type=output&subfolder=`;
-
-            // Track loaded file
             this.lastLoadedFile = hierarchyFile;
-
-            // Wait for iframe to load, then send data
-            const sendDataWhenReady = () => {
-                if (iframe.contentWindow) {
-                    iframe.contentWindow.postMessage({
-                        type: "LOAD_HIERARCHY",
-                        jsonUrl: jsonUrl,
-                        hierarchyFile: hierarchyFile,
-                        nodeId: this.id,
-                        timestamp: Date.now()
-                    }, "*");
-                }
+            this.lastHierarchyState = {
+                hierarchyFile,
+                meshFile: message.mesh_file?.[0] || null,
+                edgesFile: message.edges_file?.[0] || null,
+                boundsMin: message.bounds_min?.[0] || [0, 0, 0],
+                boundsMax: message.bounds_max?.[0] || [1, 1, 1],
             };
 
+            // Wait for iframe to load, then send data
             if (iframe.contentDocument && iframe.contentDocument.readyState === "complete") {
-                sendDataWhenReady();
+                sendLoadMessage();
             } else {
-                iframe.onload = sendDataWhenReady;
+                iframe.onload = sendLoadMessage;
             }
         };
 
         // Listen for messages from iframe
         window.addEventListener("message", (event) => {
-            if (event.data.type === "HIERARCHY_VIEWER_READY" && this.lastLoadedFile) {
+            if (event.data.type === "HIERARCHY_VIEWER_READY" && this.lastHierarchyState) {
                 // Re-send data if viewer was reloaded
-                const jsonUrl = `/view?filename=${encodeURIComponent(this.lastLoadedFile)}&type=output&subfolder=`;
-                if (iframe.contentWindow) {
-                    iframe.contentWindow.postMessage({
-                        type: "LOAD_HIERARCHY",
-                        jsonUrl: jsonUrl,
-                        hierarchyFile: this.lastLoadedFile,
-                        nodeId: this.id,
-                        timestamp: Date.now()
-                    }, "*");
-                }
+                sendLoadMessage();
             }
         });
 
