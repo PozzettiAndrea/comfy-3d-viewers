@@ -91,6 +91,9 @@ app.registerExtension({
                 // Bidirectional sync: viewer → node widgets (viewerState + real widgets)
                 const node = this;
                 window.addEventListener('message', (event) => {
+                    // Without this check, every open viewer instance's listener
+                    // fires for every iframe's messages, not just its own.
+                    if (event.source !== iframe.contentWindow) return;
                     if (event.data.type === 'WIDGET_UPDATE') {
                         const { widget: name, value } = event.data;
                         if (name in viewerState) viewerState[name] = value;

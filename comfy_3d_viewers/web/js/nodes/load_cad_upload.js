@@ -73,8 +73,25 @@ app.registerExtension({
             const node = this;
 
             // --- progress bar (DOM widget; collapses to 0 height when idle) ---
+            //
+            // IMPORTANT: ComfyUI's DOM-widget host <div> ("dom-widget size-full",
+            // position:fixed) is positioned/sized by its OWN reactive layer
+            // (Vue), driven by widget.isVisible()/widget.hidden -- it does NOT
+            // look at this element's own inline CSS (wrap.style.display) at all.
+            // Toggling only wrap.style.display leaves the *host* div fully
+            // "visible" from ComfyUI's point of view, at which point its height
+            // falls back to the "size-full" CSS class default (100% of the
+            // *viewport*, since it's position:fixed) with pointer-events:auto --
+            // an invisible, click-eating overlay stretching far below the node,
+            // permanently, regardless of whether anything is actually showing.
+            // Confirmed empirically (Playwright): computeSize()'s return value
+            // is not what drives this host div's real layout height either.
+            // The only thing that correctly collapses the host div (display:none
+            // AND pointer-events:none together) is the widget's own `hidden`
+            // flag, so that's the actual on/off switch -- wrap's inline style
+            // just controls the *content* once the host div is shown.
             const wrap = document.createElement("div");
-            wrap.style.cssText = "width:100%;padding:0 6px;box-sizing:border-box;display:none;";
+            wrap.style.cssText = "width:100%;padding:0 6px;box-sizing:border-box;";
             const label = document.createElement("div");
             label.style.cssText = "font:10px monospace;color:#bbb;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
             const track = document.createElement("div");
@@ -85,15 +102,16 @@ app.registerExtension({
             const progWidget = node.addDOMWidget("upload_progress", "div", wrap, {
                 getValue() { return ""; }, setValue() { },
             });
-            progWidget.computeSize = (w) => (wrap.style.display === "none" ? [w, 0] : [w, 26]);
+            progWidget.computeSize = (w) => [w, 26];
+            progWidget.hidden = true; // starts idle -- see note above
             const showProgress = (name, frac) => {
-                wrap.style.display = "block";
+                progWidget.hidden = false;
                 const pct = Math.max(0, Math.min(100, Math.round((frac || 0) * 100)));
                 label.textContent = `⬆ ${name} — ${pct}%`;
                 bar.style.width = pct + "%";
                 node.setDirtyCanvas(true, true);
             };
-            const hideProgress = () => { wrap.style.display = "none"; node.setDirtyCanvas(true, true); };
+            const hideProgress = () => { progWidget.hidden = true; node.setDirtyCanvas(true, true); };
 
             async function uploadList(files) {
                 const cads = [...files].filter((f) => isCad(f.name));
@@ -120,9 +138,16 @@ app.registerExtension({
             input.type = "file"; input.accept = ACCEPT; input.multiple = true; input.style.display = "none";
             input.addEventListener("change", async () => { await uploadList(input.files); input.value = ""; });
             document.body.appendChild(input);
+            node._cadFileInput = input; // removed in onRemoved below
             node.addWidget("button", "⬆ upload / drop CAD", null, () => { console.log(`${TAG} upload button clicked`); input.click(); });
 
             return r;
+        };
+
+        const onRemoved = nodeType.prototype.onRemoved;
+        nodeType.prototype.onRemoved = function () {
+            this._cadFileInput?.remove();
+            return onRemoved?.apply(this, arguments);
         };
 
         // --- drag-n-drop onto the node ---

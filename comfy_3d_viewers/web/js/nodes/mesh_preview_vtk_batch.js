@@ -136,6 +136,11 @@ app.registerExtension({
                 // Bidirectional sync: viewer → node widgets (viewerState + real widgets)
                 const node = this;
                 window.addEventListener('message', (event) => {
+                    // Without this check, every open GeomPackPreviewMeshVTKBatch
+                    // instance's listener fires for every iframe's messages, not
+                    // just its own -- e.g. toggling "show edges" in one viewer
+                    // updates every other open viewer's state too.
+                    if (event.source !== iframe.contentWindow) return;
                     if (event.data.type === 'WIDGET_UPDATE') {
                         const { widget: name, value } = event.data;
                         if (name in viewerState) viewerState[name] = value;
@@ -216,6 +221,7 @@ app.registerExtension({
 
                 // Listen for messages from iframe
                 window.addEventListener('message', async (event) => {
+                    if (event.source !== iframe.contentWindow) return;
                     // Handle screenshot messages
                     if (event.data.type === 'SCREENSHOT' && event.data.image) {
 
