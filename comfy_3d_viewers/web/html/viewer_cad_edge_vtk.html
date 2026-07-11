@@ -46,21 +46,6 @@
             max-width: 80%;
             display: none;
         }
-        #controls-hint {
-            position: absolute;
-            bottom: 8px;
-            left: 8px;
-            background: rgba(0,0,0,0.7);
-            padding: 6px 10px;
-            border-radius: 4px;
-            font-size: 10px;
-            color: #aaa;
-            z-index: 100;
-            pointer-events: none;
-        }
-        #controls-hint strong {
-            color: #4CAF50;
-        }
         #edge-info {
             background: #252530;
             padding: 10px 12px;
@@ -173,9 +158,6 @@
     <div id="container">
         <div id="loading">Loading VTK.js viewer...</div>
         <div id="error"></div>
-        <div id="controls-hint">
-            <strong>Trackball:</strong> Left=Rotate | Middle/Shift+Left=Pan | Right/Scroll=Zoom | R=Reset
-        </div>
         <!-- Old overlay panel elements (hidden, kept for JS compatibility) -->
         <div id="edge-info-overlay" style="display: none;">
             <span id="edge-id"></span>

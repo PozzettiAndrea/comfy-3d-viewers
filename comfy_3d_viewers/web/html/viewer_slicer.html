@@ -7,7 +7,8 @@
         html, body { margin: 0; padding: 0; height: 100%; background: #2a2a2a; overflow: hidden; font: 12px monospace; color: #ddd; }
         #wrap { display: flex; flex-direction: column; width: 100%; height: 100%; }
         #top { position: relative; flex: 1 1 0; min-height: 80px; background: #2a2a2a; }
-        #toolbar { flex: 0 0 auto; display: flex; gap: 6px; align-items: center; padding: 4px 6px; background: #1d1d1d; border-top: 1px solid #444; border-bottom: 1px solid #444; flex-wrap: wrap; }
+        #toolbar { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; padding: 4px 6px; background: #1d1d1d; border-top: 1px solid #444; border-bottom: 1px solid #444; }
+        #toolbar .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
         #bottom { position: relative; flex: 1 1 0; min-height: 80px; background: #222; cursor: crosshair; }
         #section { position: relative; flex: 1 1 0; min-height: 80px; background: #151515; border-top: 1px solid #444; display: none; }
         #status { flex: 1 1 auto; color: #9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -21,16 +22,27 @@
 <div id="wrap">
     <div id="top"></div>
     <div id="toolbar">
-        <span>cut view:</span>
-        <button id="axXY" class="active">XY</button>
-        <button id="axYZ">YZ</button>
-        <button id="axXZ">XZ</button>
-        <button id="lock" class="active">🔒 2D lock</button>
-        <button id="flip">⇄ flip clip</button>
-        <button id="reset">reset clip</button>
-        <button id="r2d">▣ render 2D</button>
-        <label style="color:#bbb;font:11px monospace;">edge <input id="thick" type="number" min="1" max="20" value="2" style="width:44px;background:#333;color:#ddd;border:1px solid #555;border-radius:4px;font:11px monospace;"></label>
-        <span id="status">load a mesh, then click 2 points in the bottom view to set the cut</span>
+        <div class="row">
+            <span>3d view:</span>
+            <button id="qpx">+X</button>
+            <button id="qnx">−X</button>
+            <button id="qpy">+Y</button>
+            <button id="qny">−Y</button>
+            <button id="qpz">+Z</button>
+            <button id="qnz">−Z</button>
+            <span id="status">load a mesh, then click 2 points in the bottom view to set the cut</span>
+        </div>
+        <div class="row">
+            <span>cut view:</span>
+            <button id="axXY" class="active">XY</button>
+            <button id="axYZ">YZ</button>
+            <button id="axXZ">XZ</button>
+            <button id="lock" class="active">🔒 2D lock</button>
+            <button id="flip">⇄ flip clip</button>
+            <button id="reset">reset clip</button>
+            <button id="r2d">▣ render 2D</button>
+            <label style="color:#bbb;font:11px monospace;">edge <input id="thick" type="number" min="1" max="20" value="2" style="width:44px;background:#333;color:#ddd;border:1px solid #555;border-radius:4px;font:11px monospace;"></label>
+        </div>
     </div>
     <div id="bottom"></div>
     <div id="section"></div>
@@ -194,6 +206,15 @@
         return out;
     }
 
+    // Tell the parent frame (preview_mesh_slicer.js) what's currently clipped/shown in the
+    // top 3D view, so the Python node can reproduce the same cut on the actual mesh data
+    // (execute() has no other way to see interactive browser-only state like lastPlane).
+    function postPlaneUpdate() {
+        if (!lastPlane) { parent.postMessage({ type: 'PLANE_UPDATE', hasPlane: false }, '*'); return; }
+        const n = lastPlane.normal.map(x => x * clipNormalSign);
+        parent.postMessage({ type: 'PLANE_UPDATE', hasPlane: true, origin: lastPlane.origin, normal: n }, '*');
+    }
+
     function applyClip() {
         if (!lastPlane) return;
         const n = lastPlane.normal.map(x => x * clipNormalSign);
@@ -202,7 +223,30 @@
         topMapper.addClippingPlane(plane);
         topRW.render();
         updateSection();
+        postPlaneUpdate();
     }
+
+    // Quick camera navigation for the TOP 3D view (view-cube style): reposition the
+    // orbit camera to look along a cardinal axis, centered on the mesh. Does NOT touch
+    // the clip plane -- that's still only ever set via the "cut view" pick controls below.
+    function setCameraView(dir) {
+        const c = center(), d = diag();
+        const cam = topRen.getActiveCamera();
+        cam.setFocalPoint(c[0], c[1], c[2]);
+        cam.setPosition(c[0] + dir[0]*d*2, c[1] + dir[1]*d*2, c[2] + dir[2]*d*2);
+        // pick an up vector that isn't parallel to the view direction
+        const up = Math.abs(dir[1]) > 0.9 ? [0, 0, 1] : [0, 1, 0];
+        cam.setViewUp(up[0], up[1], up[2]);
+        topRen.resetCamera();   // keeps direction/up set above, just fits distance to bounds
+        topRW.render();
+        setStatus(`3d view: looking along [${dir.join(', ')}]`);
+    }
+    document.getElementById('qpx').onclick = () => setCameraView([1, 0, 0]);
+    document.getElementById('qnx').onclick = () => setCameraView([-1, 0, 0]);
+    document.getElementById('qpy').onclick = () => setCameraView([0, 1, 0]);
+    document.getElementById('qny').onclick = () => setCameraView([0, -1, 0]);
+    document.getElementById('qpz').onclick = () => setCameraView([0, 0, 1]);
+    document.getElementById('qnz').onclick = () => setCameraView([0, 0, -1]);
 
     function updateSection() {
         if (!render2D || !lastPlane || !meshPoly) return;
@@ -293,7 +337,7 @@
     document.getElementById('axXZ').onclick = () => setAxis('XZ');
     document.getElementById('lock').onclick = () => setLocked(!locked);
     document.getElementById('flip').onclick = () => { clipNormalSign *= -1; applyClip(); };
-    document.getElementById('reset').onclick = () => { lastPlane = null; picks = []; topMapper.removeAllClippingPlanes(); topRW.render(); redrawMarkers(); setStatus('clip cleared'); };
+    document.getElementById('reset').onclick = () => { lastPlane = null; picks = []; topMapper.removeAllClippingPlanes(); topRW.render(); redrawMarkers(); setStatus('clip cleared'); postPlaneUpdate(); };
     document.getElementById('r2d').onclick = () => {
         render2D = !render2D;
         document.getElementById('r2d').classList.toggle('active', render2D);
@@ -327,6 +371,7 @@
         topRW.render();
         setLocked(true);   // positions the ortho cam + redraws markers
         setStatus('mesh loaded — pick cut view (XY/YZ/XZ), click 2 points, drag the dots to adjust.');
+        postPlaneUpdate();  // a new mesh invalidates any previous plane the parent had cached
     }
 
     window.addEventListener('message', (event) => {
