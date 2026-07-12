@@ -1,17 +1,17 @@
-// Collapsible info box for the CADabra "CAD Free Edges" node: shows the
-// per-edge report (curve type, midpoint, length) returned via
+// Collapsible info box for the CADabra "CAD Detect Free Edges" node: shows
+// the per-edge report (curve type, midpoint, length) returned via
 // ui={"text":[...]} after each run. Collapsed by default since the edge
 // list can get long (dozens of free edges on real-world sheet bodies).
 import { app } from "../../../scripts/app.js";
 
-const TAG = "[CADFreeEdgesInfo]";
+const TAG = "[CADDetectFreeEdgesInfo]";
 const COLLAPSED_HEIGHT = 26;
 const EXPANDED_HEIGHT = 180;
 
 app.registerExtension({
-    name: "cadabra.cadfreeedges.info",
+    name: "cadabra.caddetectfreeedges.info",
     async beforeRegisterNodeDef(nodeType, nodeData) {
-        if (nodeData.name !== "CADFreeEdges") return;
+        if (nodeData.name !== "CADDetectFreeEdges") return;
 
         const onExecuted = nodeType.prototype.onExecuted;
         nodeType.prototype.onExecuted = function (message) {

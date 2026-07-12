@@ -415,8 +415,11 @@
             });
         }
 
-        // Create viewport containers dynamically
-        function createViewportContainers(count) {
+        // Create viewport containers dynamically. gridCols/gridRows are optional
+        // explicit grid dimensions (e.g. from a batch-input node that lets the user
+        // pick rows/cols directly); when absent, fall back to the fixed count-based
+        // layouts below so existing callers are unaffected.
+        function createViewportContainers(count, gridCols, gridRows) {
             // Clear existing viewports but preserve settings panel elements
             const overlay = document.getElementById('settingsOverlay');
             const panel = document.getElementById('settingsPanel');
@@ -425,9 +428,13 @@
             if (panel) viewerContainer.appendChild(panel);
             viewports = [];
 
-            // Set grid class
             viewerContainer.className = '';
-            if (count === 1) {
+            viewerContainer.style.gridTemplateColumns = '';
+            viewerContainer.style.gridTemplateRows = '';
+            if (gridCols && gridRows) {
+                viewerContainer.style.gridTemplateColumns = `repeat(${gridCols}, 1fr)`;
+                viewerContainer.style.gridTemplateRows = `repeat(${gridRows}, 1fr)`;
+            } else if (count === 1) {
                 viewerContainer.classList.add('grid-1x1');
             } else if (count === 2) {
                 viewerContainer.classList.add('grid-1x2');
@@ -952,7 +959,7 @@
 
                 try {
                     // Create viewport containers
-                    createViewportContainers(numMeshes);
+                    createViewportContainers(numMeshes, data.gridCols, data.gridRows);
 
                     // Initialize VTK renderers
                     initializeViewports();
