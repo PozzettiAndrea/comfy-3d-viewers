@@ -10,7 +10,7 @@
 import { app } from "../../../scripts/app.js";
 import { getViewerUrl } from "./utils/extensionFolder.js";
 import { createContainer, createIframe, createInfoPanel } from "./utils/uiComponents.js";
-import { buildDualMeshInfoHTML } from "./utils/formatting.js";
+import { buildDualMeshInfoHTML, formatTypeCounts } from "./utils/formatting.js";
 import { createViewerManager, createErrorHandler, buildViewUrl, createLoadDualMeshMessage } from "./utils/postMessage.js";
 
 // Colour the two shapes by mesh_id in overlay (0 vs 1 -> two ends of the colormap).
@@ -72,9 +72,13 @@ app.registerExtension({
                     infoPanel.innerHTML = buildDualMeshInfoHTML({
                         mode: "fields", layout: layout,
                         mesh1: { vertices: message.vertex_count_1?.[0] || 'N/A', faces: message.face_count_1?.[0] || 'N/A',
-                                 extents: message.extents_1?.[0] || [], isWatertight: message.is_watertight_1?.[0] },
+                                 extents: message.extents_1?.[0] || [], isWatertight: message.is_watertight_1?.[0],
+                                 faceTypes: formatTypeCounts(message.face_type_counts_1?.[0]),
+                                 edgeTypes: formatTypeCounts(message.edge_type_counts_1?.[0]) },
                         mesh2: { vertices: message.vertex_count_2?.[0] || 'N/A', faces: message.face_count_2?.[0] || 'N/A',
-                                 extents: message.extents_2?.[0] || [], isWatertight: message.is_watertight_2?.[0] },
+                                 extents: message.extents_2?.[0] || [], isWatertight: message.is_watertight_2?.[0],
+                                 faceTypes: formatTypeCounts(message.face_type_counts_2?.[0]),
+                                 edgeTypes: formatTypeCounts(message.edge_type_counts_2?.[0]) },
                         commonFields: message.common_fields?.[0] || [],
                     });
                     postMessageData = createLoadDualMeshMessage({
@@ -94,8 +98,12 @@ app.registerExtension({
                     if (!message?.mesh_file) return;
                     infoPanel.innerHTML = buildDualMeshInfoHTML({
                         mode: "fields", layout: "overlay",
-                        mesh1: { vertices: message.vertex_count_1?.[0] || 'N/A', faces: message.face_count_1?.[0] || 'N/A' },
-                        mesh2: { vertices: message.vertex_count_2?.[0] || 'N/A', faces: message.face_count_2?.[0] || 'N/A' },
+                        mesh1: { vertices: message.vertex_count_1?.[0] || 'N/A', faces: message.face_count_1?.[0] || 'N/A',
+                                 faceTypes: formatTypeCounts(message.face_type_counts_1?.[0]),
+                                 edgeTypes: formatTypeCounts(message.edge_type_counts_1?.[0]) },
+                        mesh2: { vertices: message.vertex_count_2?.[0] || 'N/A', faces: message.face_count_2?.[0] || 'N/A',
+                                 faceTypes: formatTypeCounts(message.face_type_counts_2?.[0]),
+                                 edgeTypes: formatTypeCounts(message.edge_type_counts_2?.[0]) },
                         commonFields: message.common_fields?.[0] || [],
                     });
                     const overlayField = viewerState.selected_field || OVERLAY_FIELD;

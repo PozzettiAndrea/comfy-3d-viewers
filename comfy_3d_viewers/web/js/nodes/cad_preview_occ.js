@@ -143,12 +143,23 @@ app.registerExtension({
                         const boundsMin = message.bounds_min ? message.bounds_min[0] : [0, 0, 0];
                         const boundsMax = message.bounds_max ? message.bounds_max[0] : [0, 0, 0];
                         const extents = message.extents ? message.extents[0] : [0, 0, 0];
+                        const faceTypeCounts = message.face_type_counts ? message.face_type_counts[0] : {};
+                        const edgeTypeCounts = message.edge_type_counts ? message.edge_type_counts[0] : {};
+
+                        const formatTypeCounts = (counts) => Object.entries(counts)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([name, count]) => `${count} ${name}${count === 1 ? '' : 's'}`)
+                            .join(', ');
+                        const faceTypesLine = formatTypeCounts(faceTypeCounts);
+                        const edgeTypesLine = formatTypeCounts(edgeTypeCounts);
 
                         // Update info panel
                         infoPanel.innerHTML = `
                             <div style="margin-bottom: 4px;"><strong>CAD Model Info</strong></div>
                             <div>Format: ${originalFormat} -> ${format}</div>
                             <div>Topology: ${numVolumes} volumes, ${numFaces} faces, ${numEdges} edges</div>
+                            <div>Face types: ${faceTypesLine || 'n/a'}</div>
+                            <div>Edge types: ${edgeTypesLine || 'n/a'}</div>
                             <div>Deflection: ${linearDeflection}</div>
                             <div>Extents: [${extents.map(v => v.toFixed(2)).join(', ')}]</div>
                             <div>Bounds: [${boundsMin.map(v => v.toFixed(2)).join(', ')}] to [${boundsMax.map(v => v.toFixed(2)).join(', ')}]</div>
